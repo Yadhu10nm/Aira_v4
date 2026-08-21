@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Aira</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+   
+  <div id="stage">
+    <div class="bracket tl"></div>
+    <div class="bracket tr"></div>
+    <div class="bracket bl"></div>
+    <div class="bracket br"></div>
+    <div id="status"><span class="dot"></span><span class="label">STANDBY</span></div>
+    <div id="mark" class="mono">Aira</div>
+  </div>
+
+  <div id="overlay">
+    <div class="box">
+      <div class="title mono">Loading</div>
+      <div class="msg mono" id="overlay-msg">Reading ./Ayra.vrm …</div>
+      <div class="bar"><i id="overlay-bar"></i></div>
+    </div>
+  </div>
+
+  <div id="mic-note"></div>
+
+  <div id="ptt-hint" class="mono">HOLD <kbd>A</kbd> TO TALK</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+    "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3/lib/three-vrm.module.min.js"
+  }
+}
+</script>
+<script type="module" src="script.js"></script>
+</body>
+</html>
