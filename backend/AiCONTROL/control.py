@@ -38,7 +38,8 @@ class Control:
         try:
             if text:
                 t = time.time()
-                response = self.ayra.ai( text)
+                recent_chats = self.m.recent_chats(limit=5)
+                response = self.ayra.ai(text, context=recent_chats)
                 print("LLM:", time.time() - t)
                 print()
                 print("You:", text)

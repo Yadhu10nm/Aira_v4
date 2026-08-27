@@ -16,6 +16,21 @@ BASE_DIR = Path(__file__).resolve().parent
 class Memory:
     """Simple JSON-backed chat memory persistence."""
 
+    def recent_chats(self, limit=5):
+        """Return the most recent saved conversations in chronological order."""
+        file_path = BASE_DIR / "history.json"
+
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return []
+
+        if not isinstance(data, list) or limit <= 0:
+            return []
+
+        return data[-limit:]
+
     def memory(self, chat):
         """Append a chat dictionary to the history.json file.
 

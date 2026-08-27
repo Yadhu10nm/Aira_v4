@@ -113,8 +113,17 @@ def _format_context(context):
 
             elif isinstance(item, dict):
 
+                if "user" in item or "ayra" in item:
+                    user_text = str(item.get("user", "")).strip()
+                    ayra_text = str(item.get("ayra", "")).strip()
+                    exchange = []
+                    if user_text:
+                        exchange.append(f"User: {user_text}")
+                    if ayra_text:
+                        exchange.append(f"AYRA: {ayra_text}")
+                    text = "\n".join(exchange)
                 # Prefer common memory fields
-                if "text" in item:
+                elif "text" in item:
                     text = str(item["text"]).strip()
 
                 elif "content" in item:

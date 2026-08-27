@@ -1,69 +1,97 @@
-# AYRA – Frontend JS Module Structure
+# Aira AI
 
+Aira is a browser-based AI avatar frontend. It renders the Ayra VRM model with Three.js and connects push-to-talk voice input to the existing FastAPI voice and TTS endpoints.
+
+## Features
+
+- VRM avatar loading, camera controls, lighting, and responsive rendering
+- Idle breathing, blinking, look-around glances, pose and hand shaping
+- Spring-damper hair motion and VRM expressions
+- Live microphone capture with automatic speech and silence detection
+- Existing `/voice` and `/tts` backend integration
+- Text-driven viseme animation and audio playback
+- Console helpers: `ayraSpeak(text)` and `ayraStop()`
+
+## Architecture
+
+```text
+React UI
+   |
+   v
+React lifecycle and DOM shell
+   |
+   v
+Three.js / VRM engine modules
+   |
+   v
+FastAPI /voice and /tts endpoints
 ```
+
+React owns the mounted UI and engine lifecycle. The existing animation, expression, pose, hair, microphone, TTS, viseme, state, scene, and model-loader modules remain JavaScript engine modules.
+
+## Project Structure
+
+```text
 frontend/
-├── index.html              ← page shell
-├── Ayra.vrm                ← 3D model asset
-├── script.js               ← main entry, bootstraps app
-└── modules/
-    ├── scene.js            ← Three.js renderer, camera, lights, controls
-    ├── pose.js             ← bone definitions, rest pose, hand shapes
-    ├── state.js            ← UI state machine and status labels
-    ├── animation.js        ← idle sway, blink, listening glance
-    ├── expression.js       ← mouth morph targets and blink driver
-    ├── tts.js              ← audio playback + viseme lip-sync state
-    ├── mic.js              ← push-to-talk recording + backend round-trip
-    ├── hair.js             ← hair animation helper
-    └── modelLoader.js      ← VRM load, bone init, camera fit
+├── public/
+│   ├── models/Ayra.vrm
+│   ├── videos/
+│   └── assets/
+├── src/
+│   ├── modules/       # Existing avatar and voice engine modules
+│   ├── styles/        # Existing visual styling
+│   ├── App.jsx        # React DOM shell and lifecycle boundary
+│   ├── engine.js      # Existing engine entrypoint with React-safe boot
+│   └── main.jsx       # React entrypoint
+├── index.html
+├── package.json
+└── vite.config.js
 ```
 
-## Frontend behavior
+## Requirements
 
-- `index.html` loads `script.js` as an ES module.
-- `script.js` starts the render loop, loads `Ayra.vrm`, and wires the modules.
-- `mic.js` records audio while the user holds the `A` key and sends it to `http://localhost:8000/voice`.
-- The backend returns a text reply, then `mic.js` requests spoken audio from `http://localhost:8000/tts`.
-- `script.js` passes the text and returned audio blob to `tts.js`.
-- `tts.js` plays the audio and updates `lipSyncState`, which `script.js` uses to animate the mouth.
+- Node.js 18 or newer
+- A modern browser with WebGL, Web Audio, and MediaRecorder support
+- The existing FastAPI backend at `http://localhost:8000` for voice interaction
 
-## index.html setup
+## Installation
 
-```html
-<script type="module" src="script.js"></script>
+```bash
+npm install
 ```
 
-## Voice flow
+## Development
 
-1. User clicks the page once to warm audio and request microphone permission.
-2. User holds `A` to record speech.
-3. `mic.js` captures a `audio/webm` blob and sends it to `/voice`.
-4. Backend returns JSON like:
-
-```json
-{
-  "response": "Hello!"
-}
+```bash
+npm run dev
 ```
 
-5. `mic.js` then POSTs the response text to `/tts`.
-6. The backend returns `audio/wav` directly.
-7. `script.js` calls `playTTS(replyText, audioBlob, ...)`.
-8. `tts.js` drives mouth visemes from the reply text while audio plays.
+Open the URL printed by Vite, normally `http://localhost:5173`.
 
-## Console helpers
+## Production Build
 
-```js
-ayraSpeak("Hello!")   // text-only lip sync
-ayraStop()              // stop current speech immediately
+```bash
+npm run build
+npm run preview
 ```
 
-## Backend compatibility
+## Live Microphone
 
-- The current frontend expects a FastAPI backend running at `http://localhost:8000`.
-- `/voice` receives `audio/webm` and returns JSON with `response`.
-- `/tts` receives `{ text }` and returns a WAV audio body.
+Click `MIC OFF` once to enable continuous monitoring. A lightweight analyser-based VAD starts a `MediaRecorder` when the input RMS volume exceeds `VAD_THRESHOLD` (`0.035`) and ends the utterance after `SILENCE_DURATION` (`800 ms`). Utterances shorter than `MIN_SPEECH_DURATION` (`250 ms`) are ignored. Click `MIC ON` to stop the stream, recorder, analyser loop, and audio context.
 
-## Notes
+## Backend Configuration
 
-- If the backend does not provide `/tts`, the frontend still supports text-only lip sync via `ayraSpeak()`.
-- The frontend currently uses `tts.js` to build visemes from text, not from raw audio analysis.
+The frontend preserves the existing hard-coded backend URLs:
+
+- `POST http://localhost:8000/voice` receives a multipart `audio` field containing `recording.webm` and returns `{ "response": "..." }`.
+- `POST http://localhost:8000/tts` receives `{ "text": "..." }` and returns audio data, normally WAV.
+
+No environment variables or backend changes are required by this frontend.
+
+## Assets
+
+The VRM model is served from `public/models/Ayra.vrm`. Video and other public asset directories are retained under `public/videos` and `public/assets` for the existing application assets.
+
+## Important Notes
+
+Serve the app through Vite or another local HTTP server; opening the HTML file directly prevents module and model loading. The first page click requests microphone permission and warms the audio context. Browser microphone permission and an allowed audio output are required for voice interaction and TTS playback.

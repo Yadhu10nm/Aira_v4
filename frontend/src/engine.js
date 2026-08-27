@@ -23,8 +23,8 @@ import { D, REST }                                  from './modules/pose.js';
 import { appState, setState, setMicNote }           from './modules/state.js';
 import { applyIdleSway, updateBlink, updateListenGlance } from './modules/animation.js';
 import { applyMouth }                               from './modules/expression.js';
-import { lipSyncState, playTTS, stopTTS, warmAudio } from './modules/tts.js';
-import { ensureMicStream, setOnResult, speakingGuard } from './modules/mic.js';
+import { lipSyncState, playTTS, stopTTS } from './modules/tts.js';
+import { setOnResult, setMicSuppressed, speakingGuard } from './modules/mic.js';
 import { loadVRM, modelState }                      from './modules/modelLoader.js';
 import { updateHair }                               from "./modules/hair.js";
 /* =========================================================================
@@ -35,6 +35,8 @@ const MOUTH_SMOOTHING = 26;  // faster than body so lips read as articulate
 
 const scratchEuler = new THREE.Euler();
 const scratchQuat  = new THREE.Quaternion();
+let animationFrameId = null;
+let engineStarted = false;
 
 
 
@@ -43,6 +45,7 @@ const scratchQuat  = new THREE.Quaternion();
    Called by mic.js with the text reply + optional audio Blob from FastAPI.
    ========================================================================= */
 setOnResult(async (replyText, ttsAudioBlob) => {
+  setMicSuppressed(true);
   speakingGuard.isSpeaking = true;
   setState('speaking');
   setMicNote(replyText);
@@ -54,8 +57,9 @@ setOnResult(async (replyText, ttsAudioBlob) => {
     () => {
       // ── Audio finished ────────────────────────────────────────────────
       speakingGuard.isSpeaking = false;
+      setMicSuppressed(false);
       setState('idle');
-      setMicNote('Hold "A" to talk');
+      setMicNote('Listening for speech...');
     }
   );
 });
@@ -70,29 +74,19 @@ window.ayraSpeak = async (text) => {
   setMicNote(text);
   await playTTS(text, null, clock.elapsedTime, () => {
     speakingGuard.isSpeaking = false;
+    setMicSuppressed(false);
     setState('idle');
-    setMicNote('Hold "A" to talk');
+    setMicNote('Listening for speech...');
   });
 };
 
 window.ayraStop = stopTTS;
 
 /* =========================================================================
-   USER-GESTURE BOOTSTRAP
-   Browsers require a user gesture before allowing getUserMedia, AudioContext,
-   and auto-play.  One click warms all of them so the first A-press has zero
-   latency.
-   ========================================================================= */
-document.addEventListener('click', async () => {
-  warmAudio();
-  await ensureMicStream();
-}, { once: true });
-
-/* =========================================================================
    RENDER LOOP
    ========================================================================= */
 function animate() {
-  requestAnimationFrame(animate);
+  animationFrameId = requestAnimationFrame(animate);
   const delta = clock.getDelta();
   const { vrm, bones, currentQuat } = modelState;
 
@@ -165,5 +159,17 @@ function animate() {
 /* =========================================================================
    BOOT
    ========================================================================= */
-loadVRM('Ayra.vrm');
-animate();
+export function startEngine() {
+  if (engineStarted) return;
+  engineStarted = true;
+  loadVRM('/models/Ayra.vrm');
+  animate();
+}
+
+export function stopEngine() {
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+  engineStarted = false;
+}
