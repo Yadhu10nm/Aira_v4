@@ -27,6 +27,10 @@ import { lipSyncState, playTTS, stopTTS } from './modules/tts.js';
 import { setOnResult, setMicSuppressed, speakingGuard } from './modules/mic.js';
 import { loadVRM, modelState }                      from './modules/modelLoader.js';
 import { updateHair }                               from "./modules/hair.js";
+import { initParticles, updateParticles }           from './modules/particles.js';
+import { initBackground, updateBackground }         from './modules/background.js';
+import { initDynamicLighting, updateDynamicLighting } from './modules/lighting.js';
+import { initHologram, updateHologram }             from './modules/hologram.js';
 /* =========================================================================
    RENDER CONSTANTS
    ========================================================================= */
@@ -88,10 +92,16 @@ window.ayraStop = stopTTS;
 function animate() {
   animationFrameId = requestAnimationFrame(animate);
   const delta = clock.getDelta();
+  const time = clock.elapsedTime;
   const { vrm, bones, currentQuat } = modelState;
 
+  // ── Update 3D interactive effects ──────────────────────────────────────
+  updateBackground(time, delta, appState);
+  updateParticles(time, delta, appState);
+  updateDynamicLighting(time, delta, appState);
+  updateHologram(time, delta, appState, speakingGuard.isSpeaking);
+
   if (vrm) {
-    const time      = clock.elapsedTime;
     updateHair(delta);
     const listening = appState === 'listening';
 
@@ -162,6 +172,13 @@ function animate() {
 export function startEngine() {
   if (engineStarted) return;
   engineStarted = true;
+
+  // Initialize all 3D effects
+  initBackground(scene);
+  initParticles(scene);
+  initDynamicLighting(scene);
+  initHologram(scene);
+
   loadVRM('/models/Ayra.vrm');
   animate();
 }

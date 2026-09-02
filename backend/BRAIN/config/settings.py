@@ -131,11 +131,13 @@ class Settings:
         # -------------------------------------------------
 
         self.ollama_url = os.getenv(
-            "OLLAMA_URL"
+            "OLLAMA_URL",
+            "http://127.0.0.1:11434"
         ).rstrip("/")
 
         self.ollama_model = os.getenv(
-            "OLLAMA_MODEL"
+            "OLLAMA_MODEL",
+            "gemma3:4b-it-q4_K_M"
         )
 
 

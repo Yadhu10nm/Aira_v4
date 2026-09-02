@@ -84,3 +84,10 @@ backend/face_det/face_db/
 ML_models/face_db/
 ML_models/processed_faces/
 frontend/video.mp4
+
+# Ollama models and blobs
+backend/BRAIN/models/
+backend/brain/models/
+**/models/blobs/
+**/models/manifests/
+

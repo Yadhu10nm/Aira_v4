@@ -7,6 +7,8 @@
   --text-dim:#8a8d92;
   --border:rgb(255, 237, 178);
   --border-hover:rgba(255,255,255,.28);
+  --glow-cyan: rgba(77, 163, 255, 0.6);
+  --glow-amber: rgba(232, 162, 61, 0.6);
 }
 *{ box-sizing:border-box; }
 html{
@@ -46,11 +48,44 @@ body{
 .bracket{
   position:absolute; width:34px; height:34px;
   border-color:var(--bracket); pointer-events:none;
+  transition: border-color 0.3s ease;
 }
 .bracket.tl{ top:18px; left:18px; border-top:1.5px solid; border-left:1.5px solid; }
 .bracket.tr{ top:18px; right:18px; border-top:1.5px solid; border-right:1.5px solid; }
 .bracket.bl{ bottom:18px; left:18px; border-bottom:1.5px solid; border-left:1.5px solid; }
 .bracket.br{ bottom:18px; right:18px; border-bottom:1.5px solid; border-right:1.5px solid; }
+
+/* Bracket glow on state change */
+#stage:has(#status.state-listening) .bracket{
+  border-color: var(--glow-cyan);
+  filter: drop-shadow(0 0 4px var(--glow-cyan));
+}
+#stage:has(#status.state-speaking) .bracket{
+  border-color: var(--glow-amber);
+  filter: drop-shadow(0 0 4px var(--glow-amber));
+}
+
+/* Holographic scan lines overlay */
+#stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(77, 163, 255, 0.03) 0px,
+    transparent 1px,
+    transparent 2px
+  );
+  animation: scan-lines 8s linear infinite;
+  z-index: 3;
+  opacity: 0.4;
+}
+
+@keyframes scan-lines {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(20px); }
+}
 
 /* ---------- status readout (top-left) ---------- */
 #status{
@@ -58,16 +93,21 @@ body{
   display:flex; align-items:center; gap:9px;
   font-size:12.5px; letter-spacing:.06em; text-transform:uppercase;
   color:var(--text-dim);
+  transition: all 0.3s ease;
 }
 #status .dot{
   width:7px; height:7px; border-radius:50%;
   background:var(--steel); box-shadow:0 0 0 0 rgba(111,147,179,.5);
+  transition: all 0.3s ease;
 }
 #status.state-listening .dot,
 #status.state-speaking .dot,
 #status.state-processing .dot{
   background:var(--amber);
   animation:pulse 1.4s ease-in-out infinite;
+}
+#status.state-listening .dot{
+  background: #4da3ff;
 }
 #status.state-speaking .dot{ animation-duration:.55s; }
 @keyframes pulse{
@@ -76,14 +116,23 @@ body{
 }
 @media (prefers-reduced-motion: reduce){
   #status .dot{ animation:none; }
+  #stage::before{ animation:none; }
 }
-#status .label{ color:var(--text); }
+#status .label{
+  color:var(--text);
+  text-shadow: 0 0 8px currentColor;
+}
+
+/* Glow effect for status */
+#status.state-listening { text-shadow: 0 0 10px var(--glow-cyan); }
+#status.state-speaking { text-shadow: 0 0 10px var(--glow-amber); }
 
 /* ---------- title mark (top-right) ---------- */
 #mark{
   position:absolute; top:34px; right:38px;
   font-size:12.5px; letter-spacing:.08em; text-transform:uppercase;
   color:var(--text-dim); text-align:right;
+  text-shadow: 0 0 8px rgba(77, 163, 255, 0.3);
 }
 #mark b{ color:var(--text); font-weight:500; }
 
@@ -94,11 +143,23 @@ body{
 }
 #overlay.hidden{ opacity:0; pointer-events:none; }
 #overlay .box{ max-width:440px; text-align:center; padding:0 24px; }
-#overlay .title{ font-size:14px; letter-spacing:.05em; text-transform:uppercase; color:var(--text-dim); margin-bottom:10px; }
+#overlay .title{
+  font-size:14px; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--text-dim); margin-bottom:10px;
+  text-shadow: 0 0 8px var(--glow-cyan);
+}
 #overlay .msg{ font-size:13px; line-height:1.6; color:var(--text); }
 #overlay .msg.err{ color:#e08a6a; }
-#overlay .bar{ width:220px; height:2px; background:var(--border); margin:18px auto 0; overflow:hidden; }
-#overlay .bar i{ display:block; height:100%; width:0%; background:var(--amber); transition:width .2s ease; }
+#overlay .bar{
+  width:220px; height:2px; background:var(--border);
+  margin:18px auto 0; overflow:hidden;
+  box-shadow: 0 0 8px var(--glow-cyan);
+}
+#overlay .bar i{
+  display:block; height:100%; width:0%;
+  background:var(--amber); transition:width .2s ease;
+  box-shadow: 0 0 8px var(--glow-amber);
+}
 
 /* ---------- live microphone control (bottom center) ---------- */
 #mic-toggle{
@@ -107,18 +168,25 @@ body{
   border:1px solid var(--border); border-radius:3px;
   background:rgba(255, 202, 202, 0.04); color:var(--text-dim);
   font-size:11px; letter-spacing:.08em; cursor:pointer;
-  transition:color .25s ease, border-color .25s ease, background .25s ease;
+  transition:color .25s ease, border-color .25s ease, background .25s ease, box-shadow .25s ease;
 }
-#mic-toggle:hover,#mic-toggle[aria-pressed="true"]{ color:var(--amber); border-color:var(--amber); }
+#mic-toggle:hover,#mic-toggle[aria-pressed="true"]{
+  color:var(--amber); border-color:var(--amber);
+  box-shadow: 0 0 12px var(--glow-amber);
+}
 #mic-toggle[aria-pressed="true"]{ background:rgba(255, 149, 0, 0.1); }
 #mic-toggle .mic-status{ color:var(--text-dim); letter-spacing:.03em; text-transform:none; }
-#mic-toggle.mic-speaking .mic-status,#mic-toggle.mic-processing .mic-status{ color:var(--amber); }
+#mic-toggle.mic-speaking .mic-status,#mic-toggle.mic-processing .mic-status{
+  color:var(--amber);
+  text-shadow: 0 0 8px var(--glow-amber);
+}
 
 #mic-note{
   position:fixed; z-index:10; bottom:62px; left:0; right:0; text-align:center;
   font-size:12px; color:var(--text-dim); pointer-events:none;
   padding:0 32px; max-width:560px; margin:0 auto;
   line-height:1.5;
+  text-shadow: 0 0 6px rgba(77, 163, 255, 0.2);
 }
 
 @media (max-width:560px){
