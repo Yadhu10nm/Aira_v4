@@ -19,23 +19,21 @@ class Listen:
         print("STT Ready")
 
     def transcribe(self, audio_bytes):
-        
+        """Transcribe audio bytes to text and return (text, detected_language)."""
         temp = tempfile.NamedTemporaryFile(suffix=".webm", delete=False)
         try:
             temp.write(audio_bytes)
             temp.close()
 
-            # no language= passed -> faster-whisper auto-detects from the audio
             segments, info = self.model.transcribe(
-                            temp.name,
-                            language="en",
-                            beam_size=5,
-                            vad_filter=True,
-                            condition_on_previous_text=False
-                        )
+                temp.name,
+                language="en",
+                beam_size=5,
+                vad_filter=True,
+                condition_on_previous_text=False
+            )
             text = " ".join(segment.text for segment in segments).strip()
-            for segment in segments:
-                    print(repr(segment.text))
+            print("Transcribed:", repr(text))
             return (text, info.language) if text else (None, None)
 
         except Exception as e:

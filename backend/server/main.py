@@ -24,24 +24,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 
-
 from Voice.LISTEN import Listen
 from Voice.SPEAK import Speak
 from AiCONTROL.control import Control
 
-# from Translation.translation import Translator
-
 listen = Listen()
 speaker = Speak()
 control = Control()
-# translator = Translator()
-app = FastAPI()
+app = FastAPI(title="AYRA Voice Assistant API")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
         "http://127.0.0.1:5500",
-        "http://localhost:5500"
+        "http://localhost:5500",
+        "*"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -52,21 +51,14 @@ app.add_middleware(
 @app.post("/voice")
 async def voice(audio: UploadFile = File(...)):
     """Receive recorded audio, transcribe it, and return AYRA's reply."""
-
     audio_bytes = await audio.read()
-    # with open("test.webm", "wb") as f:
-    #       f.write(audio_bytes)
-    # f.close()
     print("Received audio file:", audio_bytes[:20], "...")
-    text = listen.transcribe(audio_bytes)
-    text, language = text  # Unpack both text and language
-    # print("Transcribed Text:", text)
+    text, language = listen.transcribe(audio_bytes)
     print("Detected Language:", language)
 
     start = t.time()
     if text:
         response = control.Ctrl(text)
-
         print("overall time taken:", t.time() - start)
         print("Response:", response)
         return {"response": response}

@@ -12,17 +12,18 @@ export const clock = new THREE.Clock();
 
 // ── Renderer ──────────────────────────────────────────────────────────────
 const canvasHost = document.getElementById('stage');
-export const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+export const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0xffe0f8, 1.0);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 1.0;
 canvasHost.appendChild(renderer.domElement);
 
 // ── Scene ─────────────────────────────────────────────────────────────────
 export const scene = new THREE.Scene();
-scene.background = null; // Transparent to show background effects
+scene.background = new THREE.Color(0xffe0f8); // Permanent static soft pink background
 
 // ── Camera ────────────────────────────────────────────────────────────────
 export const camera = new THREE.PerspectiveCamera(

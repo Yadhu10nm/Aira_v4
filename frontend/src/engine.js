@@ -28,7 +28,6 @@ import { setOnResult, setMicSuppressed, speakingGuard } from './modules/mic.js';
 import { loadVRM, modelState }                      from './modules/modelLoader.js';
 import { updateHair }                               from "./modules/hair.js";
 import { initParticles, updateParticles }           from './modules/particles.js';
-import { initBackground, updateBackground }         from './modules/background.js';
 import { initDynamicLighting, updateDynamicLighting } from './modules/lighting.js';
 import { initHologram, updateHologram }             from './modules/hologram.js';
 /* =========================================================================
@@ -96,7 +95,6 @@ function animate() {
   const { vrm, bones, currentQuat } = modelState;
 
   // ── Update 3D interactive effects ──────────────────────────────────────
-  updateBackground(time, delta, appState);
   updateParticles(time, delta, appState);
   updateDynamicLighting(time, delta, appState);
   updateHologram(time, delta, appState, speakingGuard.isSpeaking);
@@ -174,7 +172,6 @@ export function startEngine() {
   engineStarted = true;
 
   // Initialize all 3D effects
-  initBackground(scene);
   initParticles(scene);
   initDynamicLighting(scene);
   initHologram(scene);

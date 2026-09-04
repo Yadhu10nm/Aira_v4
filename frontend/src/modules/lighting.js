@@ -1,11 +1,8 @@
 /* =========================================================================
-   LIGHTING  –  Dynamic interactive lighting system
+   LIGHTING  –  Soft, balanced lighting system
 
-   Provides responsive lighting that:
-   - Follows mouse movement subtly
-   - Pulses with speaking state
-   - Shifts color based on conversation mood
-   - Creates depth with animated rim lights
+   Provides smooth, low-contrast illumination for the avatar.
+   No mouse interaction.
    ========================================================================= */
 
 import * as THREE from 'three';
@@ -14,121 +11,73 @@ let dynamicLights = {
   key: null,
   fill: null,
   rim: null,
+  rimLeft: null,
+  rimRight: null,
   accent: null,
-  mouseLight: null,
+  top: null,
 };
 
-let mousePos = new THREE.Vector2(0, 0);
-let targetMousePos = new THREE.Vector2(0, 0);
-
 /**
- * Initialize dynamic lighting
+ * Initialize soft, low-contrast lighting
  */
 export function initDynamicLighting(scene) {
-  // Key light (warm, strong)
-  const key = new THREE.DirectionalLight(0xfff3df, 2.2);
-  key.position.set(1.1, 1.6, 1.4);
+  // Key light (soft, warm white)
+  const key = new THREE.DirectionalLight(0xfff8f0, 1.4);
+  key.position.set(1.0, 1.5, 1.6);
   scene.add(key);
   dynamicLights.key = key;
 
-  // Fill light (cool, soft)
-  const fill = new THREE.DirectionalLight(0xbfd6ff, 0.7);
-  fill.position.set(-1.3, 0.6, 1.0);
+  // Fill light (soft, balances out contrast and shadows)
+  const fill = new THREE.DirectionalLight(0xf0f4ff, 1.2);
+  fill.position.set(-1.2, 1.0, 1.4);
   scene.add(fill);
   dynamicLights.fill = fill;
 
-  // Rim light (blue/cyan accent)
-  const rim = new THREE.DirectionalLight(0x8fb8e8, 0.8);
-  rim.position.set(-0.4, 1.4, -1.6);
+  // Primary rim light (gentle soft blue/cyan back light)
+  const rim = new THREE.DirectionalLight(0xb0d4ff, 0.7);
+  rim.position.set(0, 1.5, -2.0);
   scene.add(rim);
   dynamicLights.rim = rim;
 
-  // Ambient hemisphere light
-  const hemi = new THREE.HemisphereLight(0x9fb6cc, 0x0a0a0c, 0.55);
+  // Left rim light (subtle edge softener)
+  const rimLeft = new THREE.DirectionalLight(0xd0e4ff, 0.5);
+  rimLeft.position.set(-1.8, 1.2, -1.2);
+  scene.add(rimLeft);
+  dynamicLights.rimLeft = rimLeft;
+
+  // Right rim light (subtle edge softener)
+  const rimRight = new THREE.DirectionalLight(0xd0e4ff, 0.5);
+  rimRight.position.set(1.8, 1.2, -1.2);
+  scene.add(rimRight);
+  dynamicLights.rimRight = rimRight;
+
+  // Top light (soft top fill)
+  const top = new THREE.DirectionalLight(0xfff0f8, 0.8);
+  top.position.set(0, 3.0, 0.5);
+  scene.add(top);
+  dynamicLights.top = top;
+
+  // Ambient hemisphere light (high ambient for soft, harmonious shadows on soft pink)
+  const hemi = new THREE.HemisphereLight(0xffffff, 0xffe0f8, 1.1);
   scene.add(hemi);
 
-  // Dynamic accent point light (state-reactive)
-  const accent = new THREE.PointLight(0x4da3ff, 1.0, 5);
-  accent.position.set(0, 1.5, 0.8);
+  // Soft accent light
+  const accent = new THREE.PointLight(0xa0c8ff, 0.6, 5);
+  accent.position.set(0, 1.5, 1.0);
   scene.add(accent);
   dynamicLights.accent = accent;
 
-  // Mouse-following light
-  const mouseLight = new THREE.PointLight(0x6f93b3, 0.5, 3);
-  mouseLight.position.set(0, 1.5, 1.5);
-  scene.add(mouseLight);
-  dynamicLights.mouseLight = mouseLight;
-
-  // Mouse tracking
-  window.addEventListener('mousemove', onMouseMove);
-  window.addEventListener('touchmove', onTouchMove);
-}
-
-function onMouseMove(event) {
-  targetMousePos.x = (event.clientX / window.innerWidth) * 2 - 1;
-  targetMousePos.y = -(event.clientY / window.innerHeight) * 2 + 1;
-}
-
-function onTouchMove(event) {
-  if (event.touches.length > 0) {
-    targetMousePos.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
-    targetMousePos.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
-  }
+  // NO mouse tracking
 }
 
 /**
- * Update dynamic lights each frame
+ * Update lights each frame (no mouse interaction)
  */
 export function updateDynamicLighting(time, delta, state = 'idle') {
-  // Smooth mouse position
-  mousePos.lerp(targetMousePos, 0.08);
-
-  // Update mouse light position
-  if (dynamicLights.mouseLight) {
-    dynamicLights.mouseLight.position.x = mousePos.x * 2;
-    dynamicLights.mouseLight.position.y = 1.5 + mousePos.y * 1.5;
-    dynamicLights.mouseLight.position.z = 1.2;
-  }
-
-  // State-based light animations
-  const isSpeaking = state === 'speaking';
-  const isListening = state === 'listening';
-
-  // Accent light pulsation
+  // Subtle soft breathing effect
   if (dynamicLights.accent) {
-    if (isSpeaking) {
-      // Warm amber pulse when speaking
-      const pulse = Math.sin(time * 6) * 0.4 + 1.2;
-      dynamicLights.accent.color.setHex(0xe8a23d);
-      dynamicLights.accent.intensity = pulse * 1.5;
-      dynamicLights.accent.position.y = 1.45 + Math.sin(time * 4) * 0.1;
-    } else if (isListening) {
-      // Steady bright cyan when listening
-      dynamicLights.accent.color.setHex(0x4da3ff);
-      dynamicLights.accent.intensity = 1.3;
-    } else {
-      // Gentle breathing in idle
-      const breath = Math.sin(time * 1.5) * 0.2 + 0.8;
-      dynamicLights.accent.color.setHex(0x6f93b3);
-      dynamicLights.accent.intensity = breath;
-    }
-  }
-
-  // Rim light color shift
-  if (dynamicLights.rim) {
-    if (isSpeaking) {
-      dynamicLights.rim.color.setHex(0xffaa55);
-      dynamicLights.rim.intensity = 1.0;
-    } else {
-      dynamicLights.rim.color.setHex(0x8fb8e8);
-      dynamicLights.rim.intensity = 0.8;
-    }
-  }
-
-  // Subtle key light breathing
-  if (dynamicLights.key) {
-    const keyBreath = Math.sin(time * 0.8) * 0.1 + 2.2;
-    dynamicLights.key.intensity = keyBreath;
+    const breath = Math.sin(time * 1.2) * 0.1 + 0.6;
+    dynamicLights.accent.intensity = breath;
   }
 }
 
@@ -146,10 +95,11 @@ export function disposeDynamicLighting(scene) {
     key: null,
     fill: null,
     rim: null,
+    rimLeft: null,
+    rimRight: null,
     accent: null,
-    mouseLight: null,
+    top: null,
   };
 
-  window.removeEventListener('mousemove', onMouseMove);
-  window.removeEventListener('touchmove', onTouchMove);
+  // No event listeners to remove
 }

@@ -1,11 +1,11 @@
 /* =========================================================================
-   HOLOGRAM  –  Interactive holographic rings & visualizer effects
+   HOLOGRAM  –  Static holographic rings & visualizer effects
 
    Creates futuristic 3D holographic elements:
    - Concentric rotating cyber rings at the avatar's base
    - Holographic audio visualizer circle
-   - Interactive tilt responding to mouse movement
    - State-reactive speed, color, and pulse intensity
+   - NO mouse interaction
    ========================================================================= */
 
 import * as THREE from 'three';
@@ -15,8 +15,6 @@ let outerRing = null;
 let midRing = null;
 let innerRing = null;
 let visualizerBars = [];
-let mousePos = new THREE.Vector2(0, 0);
-let targetMousePos = new THREE.Vector2(0, 0);
 
 const BAR_COUNT = 32;
 
@@ -97,21 +95,7 @@ export function initHologram(scene) {
     visualizerBars.push(bar);
   }
 
-  // Mouse tracking for parallax tilt
-  window.addEventListener('mousemove', onMouseMove);
-  window.addEventListener('touchmove', onTouchMove);
-}
-
-function onMouseMove(event) {
-  targetMousePos.x = (event.clientX / window.innerWidth) * 2 - 1;
-  targetMousePos.y = -(event.clientY / window.innerHeight) * 2 + 1;
-}
-
-function onTouchMove(event) {
-  if (event.touches.length > 0) {
-    targetMousePos.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
-    targetMousePos.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
-  }
+  // NO mouse tracking
 }
 
 /**
@@ -120,10 +104,7 @@ function onTouchMove(event) {
 export function updateHologram(time, delta, state = 'idle', isSpeaking = false) {
   if (!hologramGroup) return;
 
-  // Smooth mouse tilt
-  mousePos.lerp(targetMousePos, 0.05);
-  hologramGroup.rotation.z = mousePos.x * 0.08;
-  hologramGroup.rotation.x = mousePos.y * 0.08;
+  // NO mouse tilt - hologram stays level
 
   const speedMultiplier = isSpeaking ? 2.5 : state === 'listening' ? 1.8 : 1.0;
 
@@ -140,12 +121,8 @@ export function updateHologram(time, delta, state = 'idle', isSpeaking = false) 
     innerRing.scale.set(innerPulse, innerPulse, innerPulse);
   }
 
-  // Dynamic colors based on state
-  const targetColorHex = isSpeaking
-    ? 0xe8a23d // Amber when speaking
-    : state === 'listening'
-    ? 0x4da3ff // Bright cyan when listening
-    : 0x6f93b3; // Steel blue when idle
+  // Permanent light blue/cyan color for all states
+  const targetColorHex = 0x4da3ff; // Bright cyan always
 
   if (outerRing?.material) {
     outerRing.material.color.lerp(new THREE.Color(targetColorHex), 0.08);
@@ -154,7 +131,7 @@ export function updateHologram(time, delta, state = 'idle', isSpeaking = false) 
     midRing.material.color.lerp(new THREE.Color(targetColorHex), 0.08);
   }
   if (innerRing?.material) {
-    innerRing.material.color.lerp(new THREE.Color(isSpeaking ? 0xffdd88 : 0xa2cdff), 0.08);
+    innerRing.material.color.lerp(new THREE.Color(0xa2cdff), 0.08);
   }
 
   // Animate audio visualizer bars
@@ -195,6 +172,5 @@ export function disposeHologram(scene) {
   midRing = null;
   innerRing = null;
 
-  window.removeEventListener('mousemove', onMouseMove);
-  window.removeEventListener('touchmove', onTouchMove);
+  // No event listeners to remove
 }

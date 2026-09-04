@@ -1,24 +1,20 @@
 /* =========================================================================
-   PARTICLES  –  Interactive floating particle system
+   PARTICLES  –  Static floating particle system
 
    Creates ambient particles that:
    - Float naturally with Perlin-like motion
-   - React to mouse/pointer movement
    - Change color/intensity based on avatar state
    - Respond to speaking with pulse effects
+   - NO mouse interaction
    ========================================================================= */
 
 import * as THREE from 'three';
 
 let particleSystem = null;
 let particles = [];
-let mousePos = new THREE.Vector2(0, 0);
-let targetMousePos = new THREE.Vector2(0, 0);
 
 const PARTICLE_COUNT = 150;
 const PARTICLE_SIZE = 0.015;
-const INTERACTION_RADIUS = 0.8;
-const MOUSE_FORCE = 0.3;
 
 /**
  * Initialize the particle system
@@ -94,9 +90,7 @@ export function initParticles(scene) {
   particleSystem = new THREE.Points(geometry, material);
   scene.add(particleSystem);
 
-  // Mouse tracking
-  window.addEventListener('mousemove', onMouseMove);
-  window.addEventListener('touchmove', onTouchMove);
+  // NO mouse tracking
 }
 
 /**
@@ -122,24 +116,6 @@ function createParticleTexture() {
 }
 
 /**
- * Mouse move handler
- */
-function onMouseMove(event) {
-  targetMousePos.x = (event.clientX / window.innerWidth) * 2 - 1;
-  targetMousePos.y = -(event.clientY / window.innerHeight) * 2 + 1;
-}
-
-/**
- * Touch move handler
- */
-function onTouchMove(event) {
-  if (event.touches.length > 0) {
-    targetMousePos.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
-    targetMousePos.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
-  }
-}
-
-/**
  * Simple noise function for organic motion
  */
 function noise(x) {
@@ -155,20 +131,11 @@ function noise(x) {
 export function updateParticles(time, delta, state = 'idle') {
   if (!particleSystem) return;
 
-  // Smooth mouse position
-  mousePos.lerp(targetMousePos, 0.05);
+  // NO mouse position updates
 
   const positions = particleSystem.geometry.attributes.position.array;
   const colors = particleSystem.geometry.attributes.color.array;
   const sizes = particleSystem.geometry.attributes.size.array;
-
-  // State-based effects
-  const isSpeaking = state === 'speaking';
-  const isListening = state === 'listening';
-
-  // Mouse position in 3D space
-  const mouseX = mousePos.x * 3;
-  const mouseY = mousePos.y * 2;
 
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
@@ -184,16 +151,7 @@ export function updateParticles(time, delta, state = 'idle') {
     p.vy += noiseY * 0.0002;
     p.vz += noiseZ * 0.0003;
 
-    // Mouse interaction
-    const dx = p.x - mouseX;
-    const dy = p.y - mouseY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-
-    if (dist < INTERACTION_RADIUS) {
-      const force = (1 - dist / INTERACTION_RADIUS) * MOUSE_FORCE;
-      p.vx += (dx / dist) * force * delta;
-      p.vy += (dy / dist) * force * delta;
-    }
+    // NO mouse interaction
 
     // Apply velocity
     p.x += p.vx;
@@ -218,30 +176,15 @@ export function updateParticles(time, delta, state = 'idle') {
     positions[i * 3 + 1] = p.y;
     positions[i * 3 + 2] = p.z;
 
-    // Color based on state
-    let targetColor = p.baseColor.clone();
-
-    if (isSpeaking) {
-      // Amber glow when speaking
-      const pulse = Math.sin(time * 8 + p.pulseOffset) * 0.5 + 0.5;
-      targetColor.setHSL(0.12, 0.8, 0.5 + pulse * 0.3);
-    } else if (isListening) {
-      // Brighter cyan when listening
-      targetColor.setHSL(0.52, 0.7, 0.6);
-    }
+    // Permanent cyan/blue color for all states
+    let targetColor = new THREE.Color().setHSL(0.52, 0.7, 0.6); // Bright cyan
 
     colors[i * 3] = targetColor.r;
     colors[i * 3 + 1] = targetColor.g;
     colors[i * 3 + 2] = targetColor.b;
 
-    // Size based on state
-    let targetSize = p.baseSize;
-    if (isSpeaking) {
-      const pulse = Math.sin(time * 6 + p.pulseOffset) * 0.3 + 1;
-      targetSize *= pulse;
-    } else if (isListening) {
-      targetSize *= 1.2;
-    }
+    // Consistent size (no state-based changes)
+    let targetSize = p.baseSize * 1.2;
 
     sizes[i] = targetSize;
   }
@@ -266,6 +209,5 @@ export function disposeParticles(scene) {
   }
   particles = [];
 
-  window.removeEventListener('mousemove', onMouseMove);
-  window.removeEventListener('touchmove', onTouchMove);
+  // No event listeners to remove
 }

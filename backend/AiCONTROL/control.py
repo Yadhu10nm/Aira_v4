@@ -19,7 +19,7 @@ from MEMORY.memory import Memory
 class Control:
     """Manage the voice-to-AI request flow and persist chat memory."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the AYRA Brain and memory backend."""
         self.ayra = Ayra()
         print("AYRA connected to Ollama.")
