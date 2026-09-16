@@ -18,6 +18,8 @@ This module does NOT:
 
 import re
 
+from .plain_text import make_plain_text
+
 
 # ---------------------------------------------------------
 # PATTERNS
@@ -148,4 +150,4 @@ def clean_response(text):
     # FINAL CLEANUP
     # -----------------------------------------------------
 
-    return text.strip()
+    return make_plain_text(text)

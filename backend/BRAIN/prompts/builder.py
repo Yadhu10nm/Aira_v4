@@ -63,7 +63,8 @@ def build_messages(
             messages.append({
                 "role": "system",
                 "content": (
-                    "Relevant information from memory:\n\n"
+                    "Recent conversation history. Use it only as context "
+                    "for the current reply:\n\n"
                     f"{context_text}"
                 )
             })
