@@ -13,7 +13,7 @@ from faster_whisper import WhisperModel
 class Listen:
     """Transcribe audio data into text using Faster Whisper."""
 
-    def __init__(self, model_size="distil-medium.en", device="cpu", compute_type="int8"):
+    def __init__(self, model_size="base", device="cpu", compute_type="int8"):
         print("Loading STT model...")
         self.model = WhisperModel(model_size, device=device, compute_type=compute_type)
         print("STT Ready")
