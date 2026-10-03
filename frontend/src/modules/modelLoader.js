@@ -1,112 +1,158 @@
 /* =========================================================================
-   MODEL LOADER  –  VRM loading, bone init, camera fit
+   MODEL LOADER  –  VRM loading, AnimationMixer init, expressions, camera fit
    ========================================================================= */
 
 import * as THREE from 'three';
 import { GLTFLoader }                      from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils }       from '@pixiv/three-vrm';
-import { scene, camera, controls }         from './scene.js';
-import { TRACKED_BONES, REST }             from './pose.js';
-import { D }                               from './pose.js';
+import { scene, camera, controls, setCameraPreset } from './scene.js';
 import { setState }                        from './state.js';
-import { setVRM as setExpressionVRM }      from './expression.js';
-import { initHair }                        from "./hair.js";
+import { setVRM as setMouthVRM }           from './expression.js';
+import { setVRM as setExpressionsVRM, triggerEmotion, resetToNeutral } from '../expressions/index.js';
+import { initAvatarAnimations, setGreetingCallbacks } from './avatarAnimation.js';
+import { initHair }                        from './hair.js';
 
 const overlay    = document.getElementById('overlay');
 const overlayMsg = document.getElementById('overlay-msg');
 const overlayBar = document.getElementById('overlay-bar');
 
-// Shared mutable state exported to the render loop.
 export const modelState = {
-  vrm:         null,
-  bones:       {},
-  currentQuat: {},
+  vrm: null,
+  gltf: null,
+  loaded: false,
 };
 
-export function loadVRM(vrmPath = './Ayra.vrm') {
+let onLoadedCallbacks = [];
+export function onAvatarLoaded(cb) {
+  if (modelState.loaded) cb(modelState.vrm);
+  else onLoadedCallbacks.push(cb);
+}
+
+export function loadVRM(vrmPath = '/models/Aira.vrm') {
   const loader = new GLTFLoader();
   loader.crossOrigin = 'anonymous';
   loader.register((parser) => new VRMLoaderPlugin(parser));
 
-  loader.load(
+  const candidates = [
     vrmPath,
-    (gltf) => onModelLoaded(gltf),
-    (progress) => {
-      if (progress.total) {
-        const pct = Math.round((progress.loaded / progress.total) * 100);
-        if (overlayBar) overlayBar.style.width = pct + '%';
-        if (overlayMsg) overlayMsg.textContent  = `Reading ${vrmPath} … ${pct}%`;
-      }
-    },
-    (error) => {
-      console.error('[MODEL] Load error:', error);
+    '/models/Aira.vrm',
+    '/models/Ayra.vrm',
+    '/models/ayra_avatar.vrm',
+  ].filter((v, i, a) => a.indexOf(v) === i);
+
+  let attempt = 0;
+
+  function tryLoadNext() {
+    if (attempt >= candidates.length) {
+      console.error('[MODEL] All VRM candidate paths failed to load.');
       if (overlayMsg) {
         overlayMsg.classList.add('err');
         overlayMsg.textContent =
-          `Couldn't load ${vrmPath}. Make sure it sits next to index.html and ` +
-          'that you\'re serving the page through a local server (Live Server or ' +
-          '`python -m http.server`) — browsers block module + model loading from a ' +
-          'plain file:// path.';
+          "Couldn't load avatar. Please check frontend/public/models/Aira.vrm";
       }
+      return;
     }
-  );
+
+    const currentUrl = candidates[attempt++];
+    console.log(`[MODEL] Loading VRM avatar from: ${currentUrl}`);
+
+    loader.load(
+      currentUrl,
+      (gltf) => {
+        console.log(`[MODEL] Successfully loaded avatar from: ${currentUrl}`);
+        onModelLoaded(gltf);
+      },
+      (progress) => {
+        if (progress.total) {
+          const pct = Math.round((progress.loaded / progress.total) * 100);
+          if (overlayBar) overlayBar.style.width = pct + '%';
+          if (overlayMsg) overlayMsg.textContent = `Reading avatar … ${pct}%`;
+        }
+      },
+      (error) => {
+        console.warn(`[MODEL] Failed loading ${currentUrl}:`, error);
+        tryLoadNext();
+      }
+    );
+  }
+
+  tryLoadNext();
 }
 
 function onModelLoaded(gltf) {
   const vrm = gltf.userData.vrm;
   modelState.vrm = vrm;
+  modelState.gltf = gltf;
+  modelState.loaded = true;
 
-  VRMUtils.removeUnnecessaryVertices(gltf.scene);
-  VRMUtils.combineSkeletons(gltf.scene);
-  VRMUtils.combineMorphs(vrm);
-  VRMUtils.rotateVRM0(vrm);
-  vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
-  scene.add(vrm.scene);
-  vrm.scene.position.y = -0.25;
+  if (vrm) {
+    VRMUtils.removeUnnecessaryVertices(gltf.scene);
 
-  initHair(vrm);
-
-  // ── Let the expression module know about the VRM ─────────────────────────
-  setExpressionVRM(vrm);
-
-  // ── Init bone quaternions from rest pose ─────────────────────────────────
-  for (const name of TRACKED_BONES) {
-    const node = vrm.humanoid.getNormalizedBoneNode(name);
-    if (node) {
-      modelState.bones[name] = node;
-      const deg  = REST[name] || [0, 0, 0];
-      const q    = new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(deg[0] * D, deg[1] * D, deg[2] * D)
-      );
-      modelState.currentQuat[name] = q;
-      node.quaternion.copy(q);
-    } else {
-      console.warn(`[MODEL] bone "${name}" not found – skipping.`);
+    // ==============================================================
+    // CRITICAL ENGINE SETTING (from hi.md):
+    // Disable autoUpdateHumanBones so VRM 1.0 humanoid transforms
+    // do not overwrite AnimationMixer skeletal tracks back to T-pose!
+    // ==============================================================
+    if (vrm.humanoid) {
+      vrm.humanoid.autoUpdateHumanBones = false;
     }
-  }
 
-  // ── Log available expressions ────────────────────────────────────────────
-  if (vrm.expressionManager?.expressionMap) {
-    console.log(
-      '[MODEL] expressions on this model:',
-      Object.keys(vrm.expressionManager.expressionMap)
-    );
+    vrm.scene.traverse((obj) => {
+      obj.frustumCulled = false;
+      // Ensure avatar is strictly without spectacles/glasses
+      if (obj.isMesh) {
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        const isGlasses = mats.some(m => m?.name && (
+          m.name.toLowerCase().includes('glass') ||
+          m.name.toLowerCase().includes('spec') ||
+          m.name.toLowerCase().includes('eyewear')
+        ));
+        if (isGlasses || obj.name.toLowerCase().includes('glass')) {
+          obj.visible = false;
+        }
+      }
+    });
+    scene.add(vrm.scene);
+    vrm.scene.position.set(0, 0, 0);
+
+    initHair(vrm);
   } else {
-    console.warn('[MODEL] no expressionManager – lip sync and blink will not drive anything.');
+    scene.add(gltf.scene);
   }
 
-  // ── Fit camera to model ──────────────────────────────────────────────────
-const box = new THREE.Box3().setFromObject(vrm.scene);
-const height = box.max.y - box.min.y;
+  // ── Initialize AnimationMixer with Ayra_Hey, Ayra_Hey_Wave, Idle ─────────
+  initAvatarAnimations(gltf, vrm);
 
-// Focus around the neck/chest
-controls.target.set(0, height * 0.72, 0);
+  // Sync greeting smiles with expression system
+  setGreetingCallbacks({
+    onSmile: () => {
+      triggerEmotion('smile', 0.85);
+    },
+    onEnd: () => {
+      // Natural linger after wave, then return to neutral resting face
+      setTimeout(() => {
+        resetToNeutral();
+      }, 1200);
+    },
+  });
 
-// Camera slightly above eye level and closer
-camera.position.set(0, height * 0.78, height * 0.27);
+  // ── Initialize Lip Movement (mouth visemes) & Expressions (brows/eyes/blush) ──
+  setMouthVRM(vrm, gltf);
+  setExpressionsVRM(vrm, gltf);
 
-controls.update();
+  // ── Camera Framing ───────────────────────────────────────────────────────
+  setCameraPreset('upper');
 
   overlay?.classList.add('hidden');
   setState('idle');
+
+  // Friendly welcome greeting wave on startup
+  setTimeout(() => {
+    triggerHey();
+  }, 1000);
+
+  onLoadedCallbacks.forEach((cb) => {
+    try { cb(vrm); } catch (e) { console.error(e); }
+  });
+  onLoadedCallbacks = [];
 }

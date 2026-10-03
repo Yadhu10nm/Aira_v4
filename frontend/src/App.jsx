@@ -25,14 +25,17 @@ function App() {
         <div className="bracket tr" />
         <div className="bracket bl" />
         <div className="bracket br" />
-        <div id="status"><span className="dot" /><span className="label">STANDBY</span></div>
+        <div id="status">
+          <span className="dot" />
+          <span className="label">STANDBY</span>
+        </div>
         <div id="mark" className="mono">Aira</div>
       </div>
 
       <div id="overlay">
         <div className="box">
           <div className="title mono">Loading</div>
-          <div className="msg mono" id="overlay-msg">Reading /models/Ayra.vrm ...</div>
+          <div className="msg mono" id="overlay-msg">Reading /models/Aira.vrm ...</div>
           <div className="bar"><i id="overlay-bar" /></div>
         </div>
       </div>

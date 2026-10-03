@@ -7,6 +7,7 @@
 */
 
 import { setState, setMicNote } from './state.js';
+import { triggerEmotion, resetToNeutral } from '../expressions/index.js';
 
 const BACKEND_URL = 'http://localhost:8000/voice';
 const TTS_URL = 'http://localhost:8000/tts';
@@ -171,6 +172,9 @@ function finishUtterance(now) {
   mediaRecorder.stop();
   mediaRecorder = null;
   processing = true;
+
+  // Natural reaction: thoughtful contemplation while waiting for AI reply
+  triggerEmotion('thinking', 0.85);
   status('processing', 'Processing...');
 }
 
@@ -179,6 +183,7 @@ async function handleUtterance(chunks) {
   audioChunks = [];
   if (audioBlob.size === 0) {
     processing = false;
+    resetToNeutral();
     status('listening', 'Listening for speech...');
     return;
   }
@@ -190,8 +195,12 @@ async function handleUtterance(chunks) {
     if (!response.ok) throw new Error(`Backend responded with ${response.status}`);
     const data = await response.json();
     const reply = data?.response ?? null;
+    const userText = data?.user_text ?? '';
+    const layaDecision = data?.laya ?? null;
+
     if (!reply) {
       processing = false;
+      resetToNeutral();
       status('listening', "Didn't catch that - keep speaking when ready.");
       return;
     }
@@ -209,9 +218,10 @@ async function handleUtterance(chunks) {
       console.error('[MIC] Failed to get TTS audio:', error);
     }
 
-    onResult?.(reply, ttsAudioBlob);
+    onResult?.(reply, ttsAudioBlob, userText, layaDecision);
   } catch (error) {
     console.error('[MIC] Backend request failed:', error);
+    resetToNeutral();
     status(listening ? 'error' : 'off', listening ? 'Backend error. Listening will resume.' : 'Microphone off');
   }
 

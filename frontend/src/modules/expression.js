@@ -1,15 +1,14 @@
 /* =========================================================================
    EXPRESSION  –  drives VRM morph targets for lip sync + blink
 
-   Writes to both the standard VRM preset names (aa/ih/ou/ee/oh) AND the
-   raw Fcl_MTH_* custom clips, because different VRM models expose lip sync
-   through different sets.  Whichever exists on the loaded file will respond;
-   the other set silently no-ops via the expressionMap existence check.
+   Writes to the standard VRM preset names (aa/ih/ou/ee/oh) AND custom clips
+   via Three-VRM's ExpressionManager, keeping mouth deformation clean and
+   free of morph conflicts.
 
    Smoothing
    ─────────
    Uses asymmetric attack/release rates: mouth shapes snap open faster than
-   they close, mimicking natural speech coarticulation.  A dead-zone prevents
+   they close, mimicking natural speech coarticulation. A dead-zone prevents
    micro-fluctuations at the silent floor.
    ========================================================================= */
 
@@ -21,12 +20,19 @@ const VISEME_CUSTOM = {
 
 // Module-level VRM reference – set once the model is loaded.
 let _vrm = null;
-export function setVRM(vrm) { _vrm = vrm; }
+
+export function setVRM(vrm) {
+  _vrm = vrm;
+}
 
 function trySetExpression(name, weight) {
   if (!_vrm?.expressionManager?.expressionMap) return;
   if (!(name in _vrm.expressionManager.expressionMap)) return;
-  try { _vrm.expressionManager.setValue(name, weight); } catch { /* ignore */ }
+  try {
+    _vrm.expressionManager.setValue(name, weight);
+  } catch {
+    /* ignore */
+  }
 }
 
 // Smoothed mouth state – persists between frames.
@@ -37,7 +43,7 @@ export const currentMouth = { A: 0, I: 0, U: 0, E: 0, O: 0, blink: 0 };
  * exponential smoothing.
  *
  * Attack (opening) is faster than release (closing), which makes the mouth
- * read as articulate speech rather than sluggish morphing.  A tiny floor
+ * read as articulate speech rather than sluggish morphing. A tiny floor
  * threshold prevents floating-point residue from accumulating.
  *
  * @param {Object} targetWeights – Desired weights for each viseme + blink

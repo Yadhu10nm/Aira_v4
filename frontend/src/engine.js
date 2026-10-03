@@ -1,89 +1,163 @@
 /* =========================================================================
-   AYRA  –  script.js  (main entry point)
+   AYRA  –  engine.js (main render loop & engine coordinator)
 
-   This file owns the render loop and wires every module together.
-   Keep it free of business logic; delegate to the modules below.
-
-   Module map
-   ──────────
-   scene.js        Three.js renderer / camera / lights / controls
-   pose.js         Bone names, rest pose, hand shapes
-   state.js        App-state machine (idle / listening / speaking) + UI labels
-   animation.js    Breathing sway, blink, look-around glance
-   expression.js   VRM morph-target driver (mouth shapes + blink)
-   tts.js          Audio-blob playback + audio-driven lip-sync state exported to render loop
-   mic.js          Push-to-talk recording → backend → hands result up here
-   modelLoader.js  VRM loading, bone init, camera fit
+   Coordinates:
+   - Three.js scene, camera, and smooth camera framing
+   - AnimationMixer driving Ayra_Hey greeting, wave loops, and Idle
+   - Original clean text-driven lip movement (AEIOU visemes) + organic blinking
+   - LAYA (System 1) emotional decision engine + 2-phase human dynamics
+   - Dynamic lighting, particles, and hair physics
    ========================================================================= */
 
 import * as THREE from 'three';
 
-import { clock, renderer, scene, camera, controls } from './modules/scene.js';
-import { D, REST }                                  from './modules/pose.js';
-import { appState, setState, setMicNote }           from './modules/state.js';
-import { applyIdleSway, updateBlink, updateListenGlance } from './modules/animation.js';
-import { applyMouth }                               from './modules/expression.js';
+import { clock, renderer, scene, camera, controls, updateCameraTransition, setCameraPreset } from './modules/scene.js';
+import { appState, setState, setMicNote } from './modules/state.js';
+import { updateBlink } from './modules/animation.js';
+import { applyMouth } from './modules/expression.js';
 import { lipSyncState, playTTS, stopTTS } from './modules/tts.js';
 import { setOnResult, setMicSuppressed, speakingGuard } from './modules/mic.js';
-import { loadVRM, modelState }                      from './modules/modelLoader.js';
-import { updateHair }                               from "./modules/hair.js";
-import { initParticles, updateParticles }           from './modules/particles.js';
+import { loadVRM, modelState } from './modules/modelLoader.js';
+import { updateAvatarAnimations, triggerHey, returnToIdle, loopWave, setStaticHeyPose } from './modules/avatarAnimation.js';
+import { updateExpressions, triggerEmotion, triggerHumanReaction, resetToNeutral } from './expressions/index.js';
+import { updateHair } from './modules/hair.js';
+import { initParticles, updateParticles } from './modules/particles.js';
 import { initDynamicLighting, updateDynamicLighting } from './modules/lighting.js';
-import { initHologram, updateHologram }             from './modules/hologram.js';
-/* =========================================================================
-   RENDER CONSTANTS
-   ========================================================================= */
-const BODY_SMOOTHING  = 18;
-const MOUTH_SMOOTHING = 26;  // faster than body so lips read as articulate
+import { initHologram, updateHologram } from './modules/hologram.js';
+import { analyzeEmotion } from './modules/emotionAnalyzer.js';
+import { connectWebSocket } from './modules/ws.js';
 
-const scratchEuler = new THREE.Euler();
-const scratchQuat  = new THREE.Quaternion();
 let animationFrameId = null;
 let engineStarted = false;
 
-
-
 /* =========================================================================
    BACKEND RESULT HANDLER
-   Called by mic.js with the text reply + optional audio Blob from FastAPI.
+   Called by mic.js with (replyText, ttsAudioBlob, userText, layaDecision).
    ========================================================================= */
-setOnResult(async (replyText, ttsAudioBlob) => {
+setOnResult(async (replyText, ttsAudioBlob, userText = '', layaDecision = null) => {
   setMicSuppressed(true);
   speakingGuard.isSpeaking = true;
   setState('speaking');
-  setMicNote(replyText);
+
+  // Strip inline action tags for UI display and TTS speech
+  const cleanDisplay = replyText
+    .replace(/\[(?:emotion|gesture|mood|action):[a-z_]+\]/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  setMicNote(cleanDisplay || replyText);
+
+  // ── LAYA (System 1) Decision or Fallback Analyzer ──────────────────────
+  let finalEmotion = 'neutral';
+  let finalGesture = null;
+  let peakIntensity = 0.88;
+  let reactionDuration = 1.5;
+  let softenIntensity = 0.25;
+
+  if (layaDecision && typeof layaDecision === 'object') {
+    finalEmotion = layaDecision.emotion || 'neutral';
+    finalGesture = layaDecision.gesture || null;
+    peakIntensity = layaDecision.intensity ?? 0.88;
+    reactionDuration = layaDecision.reaction_duration ?? 1.5;
+    softenIntensity = layaDecision.soften_intensity ?? 0.25;
+    console.log(`[ENGINE] LAYA (System 1) -> Emotion: ${finalEmotion} (has_emotion=${layaDecision.has_emotion}), Gesture: ${finalGesture}`);
+  } else {
+    const analysis = analyzeEmotion(replyText, userText);
+    finalEmotion = analysis.emotion;
+    finalGesture = analysis.gesture;
+    peakIntensity = analysis.intensity;
+    reactionDuration = 1.5;
+    softenIntensity = 0.25;
+    console.log(`[ENGINE] Client Fallback -> Emotion: ${finalEmotion}, Gesture: ${finalGesture}`);
+  }
+
+  // ── Human-like Behavior ────────────────────────────────────────────────
+  // - If no emotion / 'neutral': avatar speaks with neutral expression (mouth moves, eyes blink, brows calm).
+  // - If emotion triggered (e.g. happy/laugh): reacts first at peak for ~1.5s, then softens into normal talking face!
+  triggerHumanReaction(finalEmotion, peakIntensity, reactionDuration, softenIntensity);
+
+  if (finalGesture === 'hey') {
+    triggerHey();
+  }
 
   await playTTS(
-    replyText,
+    cleanDisplay || replyText,
     ttsAudioBlob,
     clock.elapsedTime,
     () => {
-      // ── Audio finished ────────────────────────────────────────────────
       speakingGuard.isSpeaking = false;
       setMicSuppressed(false);
       setState('idle');
       setMicNote('Listening for speech...');
+
+      // Settle gently into resting neutral when speech completes
+      setTimeout(() => {
+        resetToNeutral();
+      }, 800);
     }
   );
 });
 
 /* =========================================================================
-   SPEAK  –  convenience helper exposed globally for console testing
-   Usage in browser console: ayraSpeak("Hello world!")
+   SPEAK  –  exposed globally for console and UI testing
    ========================================================================= */
-window.ayraSpeak = async (text) => {
+window.ayraSpeak = async (text, userPrompt = '', explicitEmo = null) => {
+  if (!text) return;
+
+  const analysis = analyzeEmotion(text, userPrompt);
+  const finalEmotion = explicitEmo || analysis.emotion;
+
+  triggerHumanReaction(finalEmotion, analysis.intensity, 1.5, 0.25);
+  if (analysis.gesture === 'hey') {
+    triggerHey();
+  }
+
+  const cleanDisplay = text
+    .replace(/\[(?:emotion|gesture|mood|action):[a-z_]+\]/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
   speakingGuard.isSpeaking = true;
   setState('speaking');
-  setMicNote(text);
-  await playTTS(text, null, clock.elapsedTime, () => {
+  setMicNote(cleanDisplay || text);
+
+  await playTTS(cleanDisplay || text, null, clock.elapsedTime, () => {
     speakingGuard.isSpeaking = false;
     setMicSuppressed(false);
     setState('idle');
     setMicNote('Listening for speech...');
+
+    setTimeout(() => {
+      resetToNeutral();
+    }, 800);
   });
 };
 
 window.ayraStop = stopTTS;
+window.playHey = triggerHey;
+window.triggerBackendHey = triggerHey;
+window.playHeyLoop = loopWave;
+window.applyStaticHeyPose = setStaticHeyPose;
+window.transitionToIdle = returnToIdle;
+
+// Keyboard shortcuts for testing animations (H = Hey, S = Static Pose, I = Idle, W = Wave Loop)
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', (e) => {
+    if (['INPUT', 'TEXTAREA'].includes(e.target?.tagName)) return;
+    if (e.key === 'h' || e.key === 'H') {
+      console.log('[KEYBOARD] "H" pressed -> Triggering Ayra Hey greeting');
+      triggerHey();
+    } else if (e.key === 's' || e.key === 'S') {
+      console.log('[KEYBOARD] "S" pressed -> Applying Static Hey pose');
+      setStaticHeyPose();
+    } else if (e.key === 'i' || e.key === 'I') {
+      console.log('[KEYBOARD] "I" pressed -> Transitioning to Idle');
+      returnToIdle();
+    } else if (e.key === 'w' || e.key === 'W') {
+      console.log('[KEYBOARD] "W" pressed -> Toggling Wave loop');
+      loopWave();
+    }
+  });
+}
 
 /* =========================================================================
    RENDER LOOP
@@ -92,72 +166,48 @@ function animate() {
   animationFrameId = requestAnimationFrame(animate);
   const delta = clock.getDelta();
   const time = clock.elapsedTime;
-  const { vrm, bones, currentQuat } = modelState;
+  const isSpeaking = speakingGuard.isSpeaking;
 
-  // ── Update 3D interactive effects ──────────────────────────────────────
+  // 1. Camera smooth framing
+  updateCameraTransition(delta);
+
+  // 2. Interactive Ambient Effects
   updateParticles(time, delta, appState);
   updateDynamicLighting(time, delta, appState);
-  updateHologram(time, delta, appState, speakingGuard.isSpeaking);
+  updateHologram(time, delta, appState, isSpeaking);
 
-  if (vrm) {
+  // 3. Skeletal AnimationMixer (Idle, Ayra_Hey, Ayra_Hey_Wave)
+  updateAvatarAnimations(delta);
+
+  // 4. Lip Movement (original clean visemes + organic blink)
+  // When not speaking, mouthTarget is all 0 -> mouth stays naturally closed!
+  const mouthTarget = { A: 0, I: 0, U: 0, E: 0, O: 0, blink: updateBlink(time) };
+
+  if (lipSyncState.active) {
+    const { currentViseme, visemeWeight, nextViseme, nextWeight } = lipSyncState;
+
+    if (currentViseme) {
+      mouthTarget[currentViseme] = visemeWeight;
+    }
+
+    if (nextViseme && nextWeight > 0) {
+      mouthTarget[nextViseme] = Math.max(
+        mouthTarget[nextViseme] || 0,
+        nextWeight
+      );
+    }
+  }
+
+  const mouthDampF = 1 - Math.exp(-26 * delta);
+  applyMouth(mouthTarget, mouthDampF);
+
+  // 5. Facial Expressions & Head Posture (whenever required by LAYA)
+  updateExpressions(delta, time, isSpeaking);
+
+  // 6. Hair & Secondary Physics
+  if (modelState.vrm) {
     updateHair(delta);
-    const listening = appState === 'listening';
-
-    // ── Build bone target for this frame ───────────────────────────────────
-    const target = {};
-    for (const k in REST) target[k] = REST[k].slice();
-
-    applyIdleSway(target, time);
-
-    const glanceStrength = listening ? 1 : 0.25;
-    const glance         = updateListenGlance(time);
-    target.head = [
-      Math.sin(time * 0.21 + 2) * 1.1 + glance.headX * glanceStrength,
-      Math.sin(time * 0.27) * 2.4      + glance.headY * glanceStrength,
-      0,
-    ];
-    target.leftEye  = [glance.eyeX * glanceStrength, glance.eyeY * glanceStrength, 0];
-    target.rightEye = [glance.eyeX * glanceStrength, glance.eyeY * glanceStrength, 0];
-
-    // ── Smooth bone rotations toward target ───────────────────────────────
-    const bodyDampF = 1 - Math.exp(-BODY_SMOOTHING * delta);
-    for (const name in bones) {
-      const deg = target[name];
-      if (!deg) continue;
-      scratchEuler.set(deg[0] * D, deg[1] * D, deg[2] * D);
-      scratchQuat.setFromEuler(scratchEuler);
-      currentQuat[name].slerp(scratchQuat, bodyDampF);
-      bones[name].quaternion.copy(currentQuat[name]);
-    }
-
-    // ── Mouth / blink ─────────────────────────────────────────────────────
-    const mouthTarget = { A: 0, I: 0, U: 0, E: 0, O: 0, blink: updateBlink(time) };
-
-    // Lip-sync driven SOLELY by the viseme timeline built from response text.
-    // No audio amplitude, RMS, FFT, or analyser data is used for mouth movement.
-    if (lipSyncState.active) {
-      const { currentViseme, visemeWeight, nextViseme, nextWeight } = lipSyncState;
-
-      // The viseme timeline already provides envelope-shaped weights with
-      // attack-sustain-release.  getVisemeState() also handles coarticulation
-      // overlap, returning nextViseme/nextWeight with an appropriate bleed.
-      if (currentViseme) {
-        mouthTarget[currentViseme] = visemeWeight;
-      }
-
-      if (nextViseme && nextWeight > 0) {
-        mouthTarget[nextViseme] = Math.max(
-          mouthTarget[nextViseme] || 0,
-          nextWeight
-        );
-      }
-    }
-
-    const mouthDampF = 1 - Math.exp(-MOUTH_SMOOTHING * delta);
-    applyMouth(mouthTarget, mouthDampF);
-
-    // ── VRM update (spring bones, expressions) ────────────────────────────
-    vrm.update(delta);
+    modelState.vrm.update(delta);
   }
 
   controls.update();
@@ -171,12 +221,17 @@ export function startEngine() {
   if (engineStarted) return;
   engineStarted = true;
 
-  // Initialize all 3D effects
+  // Initialize 3D effects
   initParticles(scene);
   initDynamicLighting(scene);
   initHologram(scene);
 
-  loadVRM('/models/Ayra.vrm');
+  // Load VRM model with exact casing matching disk
+  loadVRM('/models/Aira.vrm');
+
+  // Connect WebSocket for real-time brain streaming & avatar events
+  connectWebSocket();
+
   animate();
 }
 

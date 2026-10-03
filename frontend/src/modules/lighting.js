@@ -52,13 +52,13 @@ export function initDynamicLighting(scene) {
   dynamicLights.rimRight = rimRight;
 
   // Top light (soft top fill)
-  const top = new THREE.DirectionalLight(0xfff0f8, 0.8);
+  const top = new THREE.DirectionalLight(0xffffff, 0.85);
   top.position.set(0, 3.0, 0.5);
   scene.add(top);
   dynamicLights.top = top;
 
-  // Ambient hemisphere light (high ambient for soft, harmonious shadows on soft pink)
-  const hemi = new THREE.HemisphereLight(0xffffff, 0xffe0f8, 1.1);
+  // Ambient hemisphere light (clean ambient for soft, harmonious shadows on dark background)
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x0c0c14, 1.0);
   scene.add(hemi);
 
   // Soft accent light
