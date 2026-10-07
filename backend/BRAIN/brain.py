@@ -1,131 +1,82 @@
 """
 AYRA Brain
 ----------
-Main interface between the Control layer and the LLM.
-
-Responsibilities:
-    1. Receive user text from Control.
-    2. Build the LLM messages.
-    3. Send messages to Ollama.
-    4. Clean the LLM response.
-    5. Return the response to Control.
-
-The Brain does NOT:
-    - Store chat history
-    - Manage JSON/ChromaDB memory
-    - Handle STT/TTS
-    - Handle server logic
-    - Handle voice interaction
+Main interface between the Control layer and the Gemma 3 4B LoRA model.
 """
 
-from .config.settings import settings
-from .llm.ollama import OllamaClient
-from .prompts.builder import build_messages
-from .processing.cleaner import clean_response
+import os
+import sys
+import asyncio
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from core.aira_model import get_aira_model
+from core.conversation import default_conversation
+from core.response_processor import AiraResponseProcessor
 
 
 class Ayra:
     """
-    Main AYRA Brain interface.
+    Main AYRA Brain interface backed by fine-tuned Gemma 3 4B LoRA.
 
     Usage:
         ayra = Ayra()
-        response = ayra.ai("Hello Ayra")
+        response = ayra.ai("Hello Aira")
     """
 
     def __init__(self):
-        self.client = OllamaClient(settings)
-
-        print("\n========== AYRA BRAIN ==========")
-        print(f"Model       : {settings.ollama_model}")
-        print(f"Ollama URL  : {settings.ollama_url}")
-        print(f"Context     : {settings.context_size}")
-        print(f"Max Tokens  : {settings.max_tokens}")
-        print(f"Temperature : {settings.temperature}")
-        print("================================")
-
-        self.client.check_connection()
+        self.model = get_aira_model()
+        if not self.model.is_loaded:
+            self.model.load()
+        self.conversation = default_conversation
+        self.processor = AiraResponseProcessor()
+        print("[+] AYRA Brain Ready (Gemma 3 4B + LoRA)")
 
     def ai(self, text, context=None):
-       
-
-        # Ignore empty input
+        """Generate response from Aira LoRA brain."""
         if not text or not text.strip():
             return None
 
         try:
-            # -------------------------------------------------
-            # 1. BUILD MESSAGES
-            # -------------------------------------------------
+            self.conversation.add_user_message(text)
+            messages = self.conversation.get_messages()
+            prompt = self.conversation.get_formatted_prompt(self.model.tokenizer)
 
-            messages = build_messages(
-                system_prompt=settings.system_prompt,
-                user_text=text,
-                context=context
-            )
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
 
-            # -------------------------------------------------
-            # 2. SEND TO LLM
-            # -------------------------------------------------
+            if loop and loop.is_running():
+                future = asyncio.run_coroutine_threadsafe(
+                    self.model.generate(prompt, messages=messages),
+                    loop
+                )
+                raw_response = future.result(timeout=60)
+            else:
+                raw_response = asyncio.run(self.model.generate(prompt, messages=messages))
 
-            response = self.client.chat(messages)
+            self.conversation.add_assistant_message(raw_response)
+            processed = self.processor.process(raw_response, text)
 
-            # -------------------------------------------------
-            # 3. CLEAN RESPONSE
-            # -------------------------------------------------
-
-            response = clean_response(response)
-
-            # -------------------------------------------------
-            # 4. EMPTY RESPONSE CHECK
-            # -------------------------------------------------
-
-            if not response:
-                print("AYRA: Empty response received from LLM.")
-                return "Bro, I couldn't generate a response."
-
-            return response
+            return processed["text"]
 
         except Exception as exc:
-
-            print(
-                f"AYRA BRAIN ERROR "
-                f"({type(exc).__name__}): {exc}"
-            )
-
+            print(f"AYRA BRAIN ERROR ({type(exc).__name__}): {exc}")
             return "Bro, something went wrong."
 
 
-# -------------------------------------------------------------
-# DIRECT TERMINAL TEST
-# -------------------------------------------------------------
-
 if __name__ == "__main__":
-
     ayra = Ayra()
-
-    print("\nAYRA Brain Ready.")
-    print("Type 'exit' or 'quit' to stop.\n")
-
+    print("\nAYRA Brain Ready. Type 'exit' to stop.\n")
     while True:
-
         try:
             user = input("You: ").strip()
-
             if user.lower() in {"exit", "quit"}:
-                print("Exiting AYRA...")
                 break
-
             if not user:
                 continue
-
             response = ayra.ai(user)
-
             print(f"AYRA: {response}\n")
-
         except KeyboardInterrupt:
-            print("\nStopping AYRA...")
             break
-
-        except Exception as exc:
-            print(f"Terminal error: {exc}")

@@ -13,7 +13,7 @@ import * as THREE from 'three';
 
 import { clock, renderer, scene, camera, controls, updateCameraTransition, setCameraPreset } from './modules/scene.js';
 import { appState, setState, setMicNote } from './modules/state.js';
-import { updateBlink } from './modules/animation.js';
+import { updateBlink, updateEyeGaze } from './modules/animation.js';
 import { applyMouth } from './modules/expression.js';
 import { lipSyncState, playTTS, stopTTS } from './modules/tts.js';
 import { setOnResult, setMicSuppressed, speakingGuard } from './modules/mic.js';
@@ -204,7 +204,17 @@ function animate() {
   // 5. Facial Expressions & Head Posture (whenever required by LAYA)
   updateExpressions(delta, time, isSpeaking);
 
-  // 6. Hair & Secondary Physics
+  // 6. Eye Gaze Tracking & Saccades
+  if (modelState.vrm) {
+    const isListening = (appState === 'listening');
+    const gaze = updateEyeGaze(time, delta, isListening);
+    if (modelState.vrm.lookAt) {
+      modelState.vrm.lookAt.yaw = gaze.x * 25;   // degrees horizontal
+      modelState.vrm.lookAt.pitch = gaze.y * 15; // degrees vertical
+    }
+  }
+
+  // 7. Hair & Secondary Physics
   if (modelState.vrm) {
     updateHair(delta);
     modelState.vrm.update(delta);

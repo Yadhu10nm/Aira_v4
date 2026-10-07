@@ -137,22 +137,23 @@ class Settings:
 
         self.ollama_model = os.getenv(
             "OLLAMA_MODEL",
-            "gemma3:4b-it-q4_K_M"
+            "gemma3:4b-it-q4_K_M "
         )
-
 
         # -------------------------------------------------
         # MODEL PARAMETERS
         # -------------------------------------------------
 
+        # 2048 is optimal for fast conversational voice turn latency
         self.context_size = _get_int(
             "AYRA_CONTEXT_SIZE",
-            8192
+            2048
         )
 
+        # 160 tokens is ideal for 1-3 spoken conversational sentences (~1.2s max)
         self.max_tokens = _get_int(
             "AYRA_MAX_TOKENS",
-            250
+            160
         )
 
         self.temperature = _get_float(
@@ -160,21 +161,20 @@ class Settings:
             0.6
         )
 
-
-
         # -------------------------------------------------
         # CONNECTION
         # -------------------------------------------------
 
         self.request_timeout = _get_int(
             "AYRA_REQUEST_TIMEOUT",
-            120
-       )
-
-        self.keep_alive = os.getenv(
-            "AYRA_KEEP_ALIVE"
+            60
         )
 
+        # Keep model loaded in VRAM/RAM so every turn responds instantly
+        self.keep_alive = os.getenv(
+            "AYRA_KEEP_ALIVE",
+            "24h"
+        ) or "24h"
 
         # -------------------------------------------------
         # SYSTEM PROMPT

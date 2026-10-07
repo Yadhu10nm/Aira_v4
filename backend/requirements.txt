@@ -1,6 +1,5 @@
 # =========================================================================
-# AIRA AI Assistant - Requirements
-# Python 3.10+ / PyTorch with CUDA recommended
+# AIRA Backend Requirements
 # =========================================================================
 
 # --- Deep Learning, Transformers & PEFT ---

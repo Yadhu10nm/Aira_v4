@@ -1,51 +1,75 @@
 """
 Control layer for AYRA voice interaction.
-
-This module receives transcribed user text from the voice frontend, forwards
-it to the brain/LLM layer, logs the conversation, and returns AYRA's reply.
+Routes transcribed user text to the Aira Gemma 3 4B + LoRA model,
+persists conversation memory, and returns Aira's reply.
 """
 
 import sys
 import os
 import time
+import asyncio
 import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from BRAIN.brain import Ayra
+from core.aira_model import get_aira_model
+from core.conversation import default_conversation
+from core.response_processor import AiraResponseProcessor
 from MEMORY.memory import Memory
 
 
 class Control:
-    """Manage the voice-to-AI request flow and persist chat memory."""
+    """Manage user-to-AI request flow and persist chat memory."""
 
     def __init__(self) -> None:
-        """Initialize the AYRA Brain and memory backend."""
-        self.ayra = Ayra()
-        print("AYRA connected to Ollama.")
+        """Initialize the AYRA Gemma 3 4B LoRA brain and memory backend."""
+        self.aira_model = get_aira_model()
+        if not self.aira_model.is_loaded:
+            self.aira_model.load()
+        self.conversation = default_conversation
+        self.processor = AiraResponseProcessor()
         self.m = Memory()
+        print("[+] AIRA Brain (Gemma 3 4B + LoRA) connected to Control.")
 
     def Ctrl(self, text):
-        """Send user text to AYRA and store the response in memory.
+        """Send user text to AIRA and store the response in memory.
 
         Args:
             text (str): Transcribed user input.
 
         Returns:
-            str | None | bool: AYRA response text, None when no text is provided,
-            or True on handled exception.
+            str | None: AYRA response text, or None when no text is provided.
         """
         try:
             if text:
-                t = time.time()
-                recent_chats = self.m.recent_context()
-                response = self.ayra.ai(text, context=recent_chats)
-                print("LLM:", time.time() - t)
-                print()
-                print("You:", text)
-                print("Aira:", response)
+                t0 = time.time()
+                self.conversation.add_user_message(text)
+                prompt = self.conversation.get_formatted_prompt(self.aira_model.tokenizer)
 
-                if response:
+                # Run inference synchronously if called from non-async context
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    loop = None
+
+                if loop and loop.is_running():
+                    future = asyncio.run_coroutine_threadsafe(
+                        self.aira_model.generate(prompt),
+                        loop
+                    )
+                    raw_response = future.result(timeout=60)
+                else:
+                    raw_response = asyncio.run(self.aira_model.generate(prompt))
+
+                self.conversation.add_assistant_message(raw_response)
+                processed = self.processor.process(raw_response, text)
+                response = processed["text"]
+
+                print(f"LLM time: {time.time() - t0:.2f}s")
+                print(f"You: {text}")
+                print(f"Aira: {response}")
+
+                if response and isinstance(response, str):
                     chat = {
                         "date": datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
                         "time": str(datetime.datetime.now()),
@@ -53,22 +77,20 @@ class Control:
                         "ayra": response
                     }
                     self.m.memory(chat)
-                    return response    
+                return response
             return None
-        
+
         except Exception as exc:
             print("Control command failed:", exc)
-            return True
-
-
+            return "Bro, something went wrong."
 
 
 if __name__ == "__main__":
-    print("Ayra voice mode is running. Press Ctrl+C to stop.")
+    print("Ayra conversational mode running. Type 'exit' to quit.")
     ctrl = Control()
     while True:
         try:
-            text = input("You: ")
+            text = input("\nYou: ").strip()
             if text.lower() in ["exit", "quit", "bye"]:
                 print("Exiting Ayra...")
                 break
@@ -78,4 +100,3 @@ if __name__ == "__main__":
             break
         except Exception as exc:
             print("Error:", exc)
-   

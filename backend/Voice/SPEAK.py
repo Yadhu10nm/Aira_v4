@@ -33,6 +33,8 @@ class Speak:
 
         text = text.replace("\r", " ")
         text = text.replace("\n", ". ")
+        # Strip non-ASCII/emojis so phonemizer doesn't fail on Windows charmap
+        text = re.sub(r"[^\x00-\x7F]+", " ", text)
         text = re.sub(r"\s+", " ", text)
 
         return text.strip()

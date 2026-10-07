@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aira 3D Avatar Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg: #0a0c10;
+      --card-bg: rgba(18, 22, 31, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --accent: #58a6ff;
+      --accent-glow: rgba(88, 166, 255, 0.3);
+      --text: #f0f6fc;
+      --text-muted: #8b949e;
+      --green: #3fb950;
+      --green-glow: rgba(63, 185, 80, 0.35);
+      --amber: #d29922;
+      --pink: #f778ba;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+      user-select: none;
+    }
+
+    .mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* 3D Canvas Stage */
+    #canvas-container {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Cinematic Corner Brackets */
+    .bracket {
+      position: absolute;
+      width: 28px;
+      height: 28px;
+      border-color: rgba(255, 255, 255, 0.25);
+      pointer-events: none;
+      z-index: 10;
+    }
+    .bracket.tl { top: 20px; left: 20px; border-top: 2px solid; border-left: 2px solid; }
+    .bracket.tr { top: 20px; right: 20px; border-top: 2px solid; border-right: 2px solid; }
+    .bracket.bl { bottom: 20px; left: 20px; border-bottom: 2px solid; border-left: 2px solid; }
+    .bracket.br { bottom: 20px; right: 20px; border-bottom: 2px solid; border-right: 2px solid; }
+
+    /* Top Header Bar */
+    .header-bar {
+      position: absolute;
+      top: 24px;
+      left: 36px;
+      right: 36px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 20;
+      pointer-events: none;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(16px);
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      letter-spacing: 0.05em;
+      pointer-events: auto;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 10px var(--green-glow);
+      animation: pulse 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.3); opacity: 1; }
+    }
+
+    .brand-title {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(16px);
+      padding: 8px 18px;
+      border-radius: 999px;
+    }
+
+    /* Floating Interactive Control Panel */
+    .controls-panel {
+      position: absolute;
+      right: 24px;
+      top: 80px;
+      width: 320px;
+      max-height: calc(100% - 100px);
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(20px);
+      border-radius: 16px;
+      padding: 20px;
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      overflow-y: auto;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    }
+
+    .controls-panel::-webkit-scrollbar {
+      width: 4px;
+    }
+    .controls-panel::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+
+    .panel-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      justify-content: center;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      font-family: inherit;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.25);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #000;
+      font-weight: 600;
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+
+    .btn.full {
+      grid-column: span 2;
+    }
+
+    /* Speech Simulator Input */
+    .speech-box {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .speech-input {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .speech-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-glow);
+    }
+
+    /* Subtitles / Speech Bubble HUD */
+    #subtitle-card {
+      position: absolute;
+      bottom: 34px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(16px);
+      padding: 14px 28px;
+      border-radius: 999px;
+      font-size: 15px;
+      z-index: 20;
+      max-width: 680px;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      transition: all 0.3s ease;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #subtitle-card.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(-6px);
+    }
+
+    /* Loading Overlay */
+    #loading-screen {
+      position: absolute;
+      inset: 0;
+      background: #06080c;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      transition: opacity 0.6s ease;
+    }
+
+    #loading-screen.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .load-text {
+      font-size: 14px;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+  </style>
+
+  <!-- Import maps for three and @pixiv/three-vrm using standard ESM CDN -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/",
+      "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.3.4/lib/three-vrm.module.min.js"
+    }
+  }
+  </script>
+</head>
+
+<body>
+  <!-- Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- Decorative Brackets -->
+  <div class="bracket tl"></div>
+  <div class="bracket tr"></div>
+  <div class="bracket bl"></div>
+  <div class="bracket br"></div>
+
+  <!-- Top Bar -->
+  <div class="header-bar">
+    <div class="status-badge">
+      <div class="status-dot" id="status-dot"></div>
+      <span class="mono" id="status-text">INITIALIZING</span>
+    </div>
+    <div class="brand-title mono">AIRA // HUMAN-LIKE AVATAR DEMO</div>
+  </div>
+
+  <!-- Floating Control Panel -->
+  <div class="controls-panel">
+    <!-- Camera Section -->
+    <div class="panel-section">
+      <div class="section-title">
+        <span>Camera Presets</span>
+      </div>
+      <div class="btn-grid">
+        <button class="btn active" id="cam-upper" onclick="setCameraView('upper')">Upper Body</button>
+        <button class="btn" id="cam-portrait" onclick="setCameraView('portrait')">Close Portrait</button>
+        <button class="btn full" id="cam-angle" onclick="setCameraView('angle')">3/4 Dynamic Angle</button>
+      </div>
+    </div>
+
+    <!-- Gestures & Actions -->
+    <div class="panel-section">
+      <div class="section-title">
+        <span>Human Gestures</span>
+      </div>
+      <div class="btn-grid">
+        <button class="btn" onclick="playAction('Ayra_Hey')">👋 Wave & Hey</button>
+        <button class="btn" onclick="playAction('Ayra_Hey_Wave')">🌊 Continuous Wave</button>
+        <button class="btn full" onclick="playAction('Idle')">🧘 Natural Idle Loop</button>
+      </div>
+    </div>
+
+    <!-- Emotional Micro-Expressions -->
+    <div class="panel-section">
+      <div class="section-title">
+        <span>Expressions & Attention</span>
+      </div>
+      <div class="btn-grid">
+        <button class="btn active" id="btn-emo-neutral" onclick="setEmotion('neutral')">😌 Neutral</button>
+        <button class="btn" id="btn-emo-smile" onclick="setEmotion('smile')">😊 Warm Smile</button>
+        <button class="btn" id="btn-emo-happy" onclick="setEmotion('happy')">😆 Laugh / Joy</button>
+        <button class="btn" id="btn-emo-curious" onclick="setEmotion('curious')">😏 Inquisitive</button>
+        <button class="btn" id="btn-emo-thinking" onclick="setEmotion('thinking')">🤔 Pondering</button>
+        <button class="btn" id="btn-emo-surprised" onclick="setEmotion('surprised')">😲 Surprised</button>
+        <button class="btn" id="btn-emo-sad" onclick="setEmotion('sad')">😢 Empathy</button>
+        <button class="btn" id="btn-emo-angry" onclick="setEmotion('angry')">😠 Determined</button>
+        <button class="btn full" id="btn-emo-blush" onclick="setEmotion('blush')">😳 Bashful Blush</button>
+      </div>
+    </div>
+
+    <!-- Attention & Saccades Simulator -->
+    <div class="panel-section">
+      <div class="section-title">
+        <span>Attention State</span>
+      </div>
+      <div class="btn-grid">
+        <button class="btn active" id="btn-att-idle" onclick="setAttentionMode('idle')">Resting Glance</button>
+        <button class="btn" id="btn-att-listening" onclick="setAttentionMode('listening')">Attentive Listening</button>
+      </div>
+    </div>
+
+    <!-- Interactive Speech & Lip-Sync Simulator -->
+    <div class="panel-section">
+      <div class="section-title">
+        <span>Speech & Lip-Sync Simulator</span>
+      </div>
+      <div class="speech-box">
+        <input type="text" class="speech-input mono" id="speech-text" value="Hey there! I am Aira, your real-time AI companion. Great to meet you!" />
+        <button class="btn full" style="background: var(--accent); color: #000; font-weight: 600;" onclick="simulateSpeech()">🗣️ Speak Sentence</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Subtitle Display -->
+  <div id="subtitle-card" class="mono"></div>
+
+  <!-- Loading Screen -->
+  <div id="loading-screen">
+    <div class="spinner"></div>
+    <div class="load-text mono" id="load-msg">Loading Aira 3D Humanoid Model (/models/Aira.vrm)...</div>
+  </div>
+
+  <!-- Main JavaScript Module -->
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+
+    // ── Global Scene State ──────────────────────────────────────────────────
+    let scene, camera, renderer, controls, clock;
+    let currentVRM = null;
+    let animationMixer = null;
+    let actions = {};
+    let activeAction = null;
+    let headBone = null;
+
+    // Organic Animation Drivers
+    let attentionMode = 'idle'; // 'idle' or 'listening'
+    let currentEmotion = 'neutral';
+    let targetEmotion = 'neutral';
+    let emotionIntensity = 0.0;
+    let currentPitch = 0.0, currentRoll = 0.0;
+    
+    // Blinking
+    let nextBlinkAt = 2.0;
+    let blinkStart = null;
+    let isDoubleBlink = false;
+    let doubleBlinkSecond = false;
+    let currentBlinkWeight = 0.0;
+
+    // Eye Saccades
+    let currentGaze = { x: 0, y: 0 };
+    let targetGaze = { x: 0, y: 0 };
+    let nextSaccadeAt = 0;
+
+    // Speech & Lip-Sync
+    let isSpeaking = false;
+    let speechTimeline = [];
+    let speechStartTime = 0;
+    let currentMouth = { A: 0, I: 0, U: 0, E: 0, O: 0 };
+
+    // Camera presets
+    const CAM_PRESETS = {
+      portrait: { pos: new THREE.Vector3(0, 1.46, 0.56), target: new THREE.Vector3(0, 1.46, 0) },
+      upper:    { pos: new THREE.Vector3(0, 1.42, 1.15), target: new THREE.Vector3(0, 1.39, 0) },
+      angle:    { pos: new THREE.Vector3(0.35, 1.44, 0.75), target: new THREE.Vector3(0, 1.44, 0) }
+    };
+    let activeCamPreset = 'upper';
+    let camLerpTarget = new THREE.Vector3().copy(CAM_PRESETS.upper.pos);
+    let camLookTarget = new THREE.Vector3().copy(CAM_PRESETS.upper.target);
+
+    // ── Expression Morphs Catalog ───────────────────────────────────────────
+    const MORPH_TARGETS = {
+      neutral:   { morphs: {}, head: { pitch: 0, roll: 0 } },
+      smile:     { morphs: { Fcl_EYE_Joy: 0.38, Fcl_BRW_Joy: 0.25, Fcl_MTH_Joy: 0.65, Fcl_MTH_Up: 0.16 }, head: { pitch: 0.012, roll: 0.015 } },
+      happy:     { morphs: { Fcl_BRW_Joy: 0.70, Fcl_EYE_Joy: 0.65, Fcl_MTH_Joy: 0.70, Fcl_MTH_Up: 0.22 }, head: { pitch: 0.02, roll: 0.018 } },
+      curious:   { morphs: { Fcl_BRW_Fun: 0.55, Fcl_EYE_Fun: 0.40, Fcl_MTH_Up: 0.16 }, head: { pitch: 0.012, roll: 0.040 } },
+      thinking:  { morphs: { Fcl_BRW_Surprised: 0.55, Fcl_BRW_Fun: 0.20, Fcl_MTH_Small: 0.18 }, head: { pitch: 0.015, roll: 0.045 } },
+      surprised: { morphs: { Fcl_BRW_Surprised: 0.85, Fcl_EYE_Spread: 0.75, Fcl_EYE_Surprised: 0.60 }, head: { pitch: -0.035, roll: 0.0 } },
+      sad:       { morphs: { Fcl_BRW_Sorrow: 0.80, Fcl_EYE_Sorrow: 0.70, Fcl_MTH_Down: 0.20 }, head: { pitch: 0.035, roll: 0.010 } },
+      angry:     { morphs: { Fcl_BRW_Angry: 0.85, Fcl_EYE_Angry: 0.75, Fcl_MTH_Down: 0.15 }, head: { pitch: 0.022, roll: -0.015 } },
+      blush:     { morphs: { Fcl_EYE_Joy: 0.45, Fcl_BRW_Joy: 0.35, Fcl_MTH_Up: 0.14 }, head: { pitch: 0.020, roll: 0.035 } }
+    };
+
+    // ── Setup Scene & Renderer ──────────────────────────────────────────────
+    function initScene() {
+      const container = document.getElementById('canvas-container');
+      clock = new THREE.Clock();
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setClearColor(0x0a0c10, 1.0);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.05;
+      container.appendChild(renderer.domElement);
+
+      scene = new THREE.Scene();
+
+      // Atmospheric Lighting
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+      scene.add(ambientLight);
+
+      const keyLight = new THREE.DirectionalLight(0xfff8ee, 1.8);
+      keyLight.position.set(1.5, 2.5, 2.0);
+      scene.add(keyLight);
+
+      const fillLight = new THREE.DirectionalLight(0x7090ff, 0.9);
+      fillLight.position.set(-2.0, 1.5, 1.0);
+      scene.add(fillLight);
+
+      const rimLight = new THREE.DirectionalLight(0x58a6ff, 1.4);
+      rimLight.position.set(0, 2.0, -2.0);
+      scene.add(rimLight);
+
+      // Camera & Controls
+      camera = new THREE.PerspectiveCamera(22, window.innerWidth / window.innerHeight, 0.1, 20);
+      camera.position.copy(CAM_PRESETS.upper.pos);
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.target.copy(CAM_PRESETS.upper.target);
+      controls.minDistance = 0.4;
+      controls.maxDistance = 3.5;
+      controls.maxPolarAngle = Math.PI * 0.55;
+      controls.update();
+
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // ── Load VRM Model ──────────────────────────────────────────────────────
+    function loadAvatar() {
+      const loader = new GLTFLoader();
+      loader.crossOrigin = 'anonymous';
+      loader.register((parser) => new VRMLoaderPlugin(parser));
+
+      const vrmPath = '/models/Aira.vrm';
+
+      loader.load(
+        vrmPath,
+        (gltf) => {
+          const vrm = gltf.userData.vrm;
+          currentVRM = vrm;
+
+          if (vrm) {
+            VRMUtils.removeUnnecessaryVertices(gltf.scene);
+            if (vrm.humanoid) {
+              vrm.humanoid.autoUpdateHumanBones = false;
+            }
+
+            vrm.scene.traverse((obj) => {
+              obj.frustumCulled = false;
+              if (obj.isMesh && (obj.name.toLowerCase().includes('glass') || obj.name.toLowerCase().includes('spec'))) {
+                obj.visible = false;
+              }
+              if (obj.isBone && obj.name.includes('Head') && !headBone) {
+                headBone = obj;
+              }
+            });
+
+            scene.add(vrm.scene);
+            vrm.scene.position.set(0, 0, 0);
+          } else {
+            scene.add(gltf.scene);
+          }
+
+          // Setup Animation Mixer
+          animationMixer = new THREE.AnimationMixer(vrm ? vrm.scene : gltf.scene);
+          const clips = gltf.animations || [];
+
+          clips.forEach((clip) => {
+            const action = animationMixer.clipAction(clip);
+            actions[clip.name] = action;
+            if (clip.name === 'Idle') {
+              action.setLoop(THREE.LoopRepeat);
+              action.play();
+              activeAction = action;
+            } else if (clip.name === 'Ayra_Hey_Wave') {
+              action.setLoop(THREE.LoopRepeat);
+            } else {
+              action.setLoop(THREE.LoopOnce);
+              action.clampWhenFinished = true;
+            }
+          });
+
+          // Animation finished event
+          animationMixer.addEventListener('finished', (e) => {
+            if (actions['Idle']) {
+              actions['Idle'].reset().fadeIn(0.5).play();
+              activeAction = actions['Idle'];
+            }
+          });
+
+          // Ready UI
+          const loaderScreen = document.getElementById('loading-screen');
+          loaderScreen.classList.add('fade-out');
+          document.getElementById('status-text').textContent = 'READY // ONLINE';
+
+          animate();
+        },
+        (progress) => {
+          if (progress.total > 0) {
+            const pct = Math.round((progress.loaded / progress.total) * 100);
+            document.getElementById('load-msg').textContent = `Loading Aira Avatar: ${pct}%`;
+          }
+        },
+        (err) => {
+          console.error('[DEMO] Error loading VRM avatar:', err);
+          document.getElementById('load-msg').textContent = 'Error loading /models/Aira.vrm. Please ensure backend or vite server is hosting the public folder.';
+        }
+      );
+    }
+
+    // ── Animation Playback ──────────────────────────────────────────────────
+    window.playAction = function(name) {
+      if (!actions[name]) {
+        console.warn('Action not found:', name);
+        return;
+      }
+      const newAction = actions[name];
+      if (activeAction && activeAction !== newAction) {
+        activeAction.fadeOut(0.35);
+      }
+      newAction.reset().fadeIn(0.35).play();
+      activeAction = newAction;
+    };
+
+    // ── Expression Manager ──────────────────────────────────────────────────
+    window.setEmotion = function(emoName) {
+      targetEmotion = emoName;
+      emotionIntensity = 0.85;
+
+      document.querySelectorAll('[id^="btn-emo-"]').forEach(btn => btn.classList.remove('active'));
+      const activeBtn = document.getElementById(`btn-emo-${emoName}`);
+      if (activeBtn) activeBtn.classList.add('active');
+    };
+
+    window.setAttentionMode = function(mode) {
+      attentionMode = mode;
+      document.getElementById('btn-att-idle').classList.toggle('active', mode === 'idle');
+      document.getElementById('btn-att-listening').classList.toggle('active', mode === 'listening');
+      document.getElementById('status-text').textContent = (mode === 'listening') ? 'ATTENTIVE LISTENING' : 'ONLINE // STANDBY';
+    };
+
+    window.setCameraView = function(viewKey) {
+      activeCamPreset = viewKey;
+      const p = CAM_PRESETS[viewKey];
+      camLerpTarget.copy(p.pos);
+      camLookTarget.copy(p.target);
+
+      ['cam-upper', 'cam-portrait', 'cam-angle'].forEach(id => {
+        document.getElementById(id).classList.remove('active');
+      });
+      document.getElementById(`cam-${viewKey}`).classList.add('active');
+    };
+
+    // ── Speech / Viseme Simulator ───────────────────────────────────────────
+    window.simulateSpeech = function() {
+      const text = document.getElementById('speech-text').value.trim();
+      if (!text) return;
+
+      const subCard = document.getElementById('subtitle-card');
+      subCard.textContent = `"${text}"`;
+      subCard.classList.add('show');
+
+      // Build simulated phoneme timeline
+      speechTimeline = [];
+      let cursor = 0;
+      const letters = text.toLowerCase();
+
+      for (let i = 0; i < letters.length; i++) {
+        const char = letters[i];
+        let viseme = null;
+        let dur = 0.08;
+
+        if (/[aeiou]/.test(char)) {
+          viseme = char.toUpperCase();
+          dur = 0.14;
+        } else if (/[bmp]/.test(char)) {
+          viseme = 'U';
+          dur = 0.06;
+        } else if (/[fv]/.test(char)) {
+          viseme = 'E';
+          dur = 0.06;
+        } else if (/[tdszl]/.test(char)) {
+          viseme = 'I';
+          dur = 0.07;
+        } else if (/[kgh]/.test(char)) {
+          viseme = 'A';
+          dur = 0.07;
+        } else if (/\s/.test(char)) {
+          dur = 0.09;
+        }
+
+        if (viseme) {
+          speechTimeline.push({ time: cursor, viseme, dur });
+        }
+        cursor += dur;
+      }
+
+      speechStartTime = clock.getElapsedTime();
+      isSpeaking = true;
+
+      // Small natural conversational nod
+      if (headBone) {
+        headBone.rotation.x += 0.03;
+      }
+
+      setTimeout(() => {
+        isSpeaking = false;
+        subCard.classList.remove('show');
+      }, (cursor + 0.3) * 1000);
+    };
+
+    // ── Main Render Loop ────────────────────────────────────────────────────
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const delta = clock.getDelta();
+      const time = clock.getElapsedTime();
+
+      // 1. Advance Skeletal Mixer
+      if (animationMixer) {
+        animationMixer.update(delta);
+      }
+
+      // 2. Camera Smooth Transition
+      camera.position.lerp(camLerpTarget, 0.08);
+      controls.target.lerp(camLookTarget, 0.08);
+      controls.update();
+
+      // 3. Organic Blinking (double-blinks + variable timing)
+      if (blinkStart === null && time >= nextBlinkAt) {
+        blinkStart = time;
+        isDoubleBlink = Math.random() < 0.18;
+        doubleBlinkSecond = false;
+      }
+
+      if (blinkStart !== null) {
+        const bt = time - blinkStart;
+        const bDur = 0.20;
+
+        if (bt < bDur) {
+          const phase = bt / bDur;
+          currentBlinkWeight = phase < 0.35 ? phase / 0.35 : 1 - (phase - 0.35) / 0.65;
+        } else if (isDoubleBlink && !doubleBlinkSecond) {
+          if (bt > bDur + 0.08 && bt < bDur + 0.24) {
+            const p2 = (bt - (bDur + 0.08)) / 0.16;
+            currentBlinkWeight = p2 < 0.35 ? p2 / 0.35 : 1 - (p2 - 0.35) / 0.65;
+          } else if (bt >= bDur + 0.24) {
+            doubleBlinkSecond = true;
+          } else {
+            currentBlinkWeight = 0;
+          }
+        } else {
+          currentBlinkWeight = 0;
+          blinkStart = null;
+          nextBlinkAt = time + 2.4 + Math.random() * 3.5;
+        }
+      }
+
+      // 4. Organic Eye Saccades
+      if (time >= nextSaccadeAt) {
+        if (attentionMode === 'listening') {
+          targetGaze.x = (Math.random() - 0.5) * 0.14;
+          targetGaze.y = (Math.random() - 0.5) * 0.08;
+          nextSaccadeAt = time + 0.9 + Math.random() * 1.5;
+        } else {
+          const lookAway = Math.random() < 0.22;
+          if (lookAway) {
+            targetGaze.x = (Math.random() - 0.5) * 0.40;
+            targetGaze.y = (Math.random() - 0.5) * 0.20;
+            nextSaccadeAt = time + 0.6 + Math.random() * 0.8;
+          } else {
+            targetGaze.x = (Math.random() - 0.5) * 0.16;
+            targetGaze.y = (Math.random() - 0.5) * 0.10;
+            nextSaccadeAt = time + 1.4 + Math.random() * 2.2;
+          }
+        }
+      }
+      currentGaze.x += (targetGaze.x - currentGaze.x) * (1 - Math.exp(-24 * delta));
+      currentGaze.y += (targetGaze.y - currentGaze.y) * (1 - Math.exp(-24 * delta));
+
+      // 5. Speech Lip-Sync State
+      const targetMouth = { A: 0, I: 0, U: 0, E: 0, O: 0 };
+      if (isSpeaking) {
+        const elapsed = time - speechStartTime;
+        for (const pt of speechTimeline) {
+          if (elapsed >= pt.time && elapsed <= pt.time + pt.dur) {
+            const progress = (elapsed - pt.time) / pt.dur;
+            const w = Math.sin(progress * Math.PI) * 0.85;
+            targetMouth[pt.viseme] = Math.max(targetMouth[pt.viseme] || 0, w);
+          }
+        }
+      }
+
+      for (const k in currentMouth) {
+        currentMouth[k] += ((targetMouth[k] || 0) - currentMouth[k]) * (1 - Math.exp(-26 * delta));
+      }
+
+      // 6. Apply to VRM Expressions & LookAt
+      if (currentVRM) {
+        // VRM Eye Gaze
+        if (currentVRM.lookAt) {
+          currentVRM.lookAt.yaw = currentGaze.x * 24;
+          currentVRM.lookAt.pitch = currentGaze.y * 14;
+        }
+
+        // Facial Expressions Blend
+        const activeDef = MORPH_TARGETS[targetEmotion] || MORPH_TARGETS.neutral;
+        const morphDamp = 1 - Math.exp(-14 * delta);
+
+        // Apply Blink
+        if (currentVRM.expressionManager) {
+          currentVRM.expressionManager.setValue('blink', currentBlinkWeight);
+
+          // Apply Speech Mouth
+          currentVRM.expressionManager.setValue('aa', currentMouth.A);
+          currentVRM.expressionManager.setValue('ih', currentMouth.I);
+          currentVRM.expressionManager.setValue('ou', currentMouth.U);
+          currentVRM.expressionManager.setValue('ee', currentMouth.E);
+          currentVRM.expressionManager.setValue('oh', currentMouth.O);
+        }
+
+        // Apply Custom Morph Targets across meshes
+        currentVRM.scene.traverse((child) => {
+          if (child.isMesh && child.morphTargetDictionary) {
+            for (const [morphName, targetWeight] of Object.entries(activeDef.morphs)) {
+              const idx = child.morphTargetDictionary[morphName];
+              if (idx !== undefined) {
+                const cur = child.morphTargetInfluences[idx] || 0;
+                child.morphTargetInfluences[idx] = cur + (targetWeight * emotionIntensity - cur) * morphDamp;
+              }
+            }
+          }
+        });
+
+        // 7. Secondary Head Posture
+        if (headBone) {
+          currentPitch += (activeDef.head.pitch - currentPitch) * (1 - Math.exp(-10 * delta));
+          currentRoll += (activeDef.head.roll - currentRoll) * (1 - Math.exp(-10 * delta));
+
+          headBone.rotation.x += currentPitch * 0.05;
+          headBone.rotation.z += currentRoll * 0.05;
+
+          if (isSpeaking) {
+            headBone.rotation.x += Math.sin(time * 6.0) * 0.003;
+          }
+        }
+
+        currentVRM.update(delta);
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // Initialize on page load
+    initScene();
+    loadAvatar();
+  </script>
+</body>
+</html>

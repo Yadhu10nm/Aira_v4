@@ -147,7 +147,23 @@ def clean_response(text):
     )
 
     # -----------------------------------------------------
+    # REMOVE SPEAKER PREFIXES (e.g. "AYRA:", "Aira:", "Assistant:")
+    # -----------------------------------------------------
+    text = re.sub(
+        r"^(?:(?:ayra|aira|assistant)\s*:\s*)+",
+        "",
+        text.strip(),
+        flags=re.IGNORECASE
+    )
+
+    # -----------------------------------------------------
     # FINAL CLEANUP
     # -----------------------------------------------------
 
-    return make_plain_text(text)
+    cleaned = make_plain_text(text)
+    return re.sub(
+        r"^(?:(?:ayra|aira|assistant)\s*:\s*)+",
+        "",
+        cleaned,
+        flags=re.IGNORECASE
+    ).strip()
